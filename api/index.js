@@ -40,6 +40,11 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9"
 };
 
+// Прокси хелпър за заобикаляне на 403 Forbidden
+function getProxyUrl(targetUrl) {
+  return `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+}
+
 // --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
   try {
@@ -57,8 +62,8 @@ async function findIMDbId(title, type) {
 // --- ХЕЛПЪРИ ТЪРСЕНЕ И КАТАЛОГ ---
 async function searchKisskh(query, kissType) {
   try {
-    const url = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
-    const response = await axios.get(url, { headers: HEADERS, timeout: 8000 });
+    const targetUrl = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
+    const response = await axios.get(getProxyUrl(targetUrl), { headers: HEADERS, timeout: 10000 });
     return response.data || [];
   } catch (e) {
     console.error("Search Error:", e.message);
@@ -68,8 +73,8 @@ async function searchKisskh(query, kissType) {
 
 async function fetchPageFromKisskh(kissType, page) {
   try {
-    const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
-    const response = await axios.get(url, { headers: HEADERS, timeout: 10000 });
+    const targetUrl = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
+    const response = await axios.get(getProxyUrl(targetUrl), { headers: HEADERS, timeout: 12000 });
     
     if (Array.isArray(response.data)) return response.data;
     if (response.data && Array.isArray(response.data.data)) return response.data.data;
@@ -131,8 +136,8 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
 
 async function getKisskhMeta(dramaId, type) {
   try {
-    const url = `${KISSKH_BASE}/api/DramaList/Drama/${dramaId}?sub=true`;
-    const response = await axios.get(url, { headers: HEADERS, timeout: 10000 });
+    const targetUrl = `${KISSKH_BASE}/api/DramaList/Drama/${dramaId}?sub=true`;
+    const response = await axios.get(getProxyUrl(targetUrl), { headers: HEADERS, timeout: 12000 });
     const drama = response.data;
 
     let rawEpisodes = drama.episodes || [];
@@ -169,9 +174,10 @@ async function getKisskhMeta(dramaId, type) {
 
 async function getKisskhStream(episodeId) {
   try {
-    const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
+    const targetUrl = `${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`;
+    const response = await axios.get(getProxyUrl(targetUrl), {
       headers: HEADERS,
-      timeout: 8000
+      timeout: 10000
     });
 
     if (response.data && response.data.Video) {
