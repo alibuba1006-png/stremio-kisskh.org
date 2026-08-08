@@ -277,9 +277,13 @@ builder.defineStreamHandler(async (args) => {
   return { streams };
 });
 
-// Експорт за Vercel
+// --- ЕКСПОРТ ЗА VERCEL SERVERLESS ---
 const addonInterface = builder.getInterface();
 
 module.exports = (req, res) => {
-  addonInterface.get(req, res);
+  // Добавяме това за случаите, в които Vercel подава заявка към коренната директория
+  if (req.url === "/" || !req.url) {
+    req.url = "/manifest.json";
+  }
+  return addonInterface.get(req, res);
 };
