@@ -1,5 +1,3 @@
-const express = require("express");
-const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 
 const KISSKH_BASE = "https://kisskh.co";
@@ -33,8 +31,6 @@ const manifest = {
     }
   ]
 };
-
-const builder = new addonBuilder(manifest);
 
 // --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
@@ -163,7 +159,6 @@ async function getKisskhMeta(dramaId, type) {
   }
 }
 
-// --- ИЗВЛИЧАНЕ НА СТРИЙМ ---
 async function getKisskhStream(episodeId) {
   try {
     const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
@@ -183,65 +178,90 @@ async function getKisskhStream(episodeId) {
   return [];
 }
 
-// --- HANDLERS ---
-builder.defineCatalogHandler(async (args) => {
-  const skip = (args.extra && args.extra.skip) ? parseInt(args.extra.skip) : 0;
-  const search = (args.extra && args.extra.search) ? args.extra.search : null;
-  const metas = await getKisskhCatalog(args.type, skip, search);
-  return { metas };
-});
+// --- VERCEL SERVERLESS HANDLER ---
+module.exports = async (req, res) => {
+  // CORS хедъри за Stremio
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+  res.setHeader("Content-Type", "application/json");
 
-builder.defineMetaHandler(async (args) => {
-  if (!args.id.startsWith("kisskh:")) return { meta: null };
-  const dramaId = args.id.replace("kisskh:", "");
-  const meta = await getKisskhMeta(dramaId, args.type);
-  return { meta };
-});
+  const url = req.url.split("?")[0];
 
-builder.defineStreamHandler(async (args) => {
-  let dramaId, episodeId;
-
-  if (args.id.startsWith("tt")) {
-    const idParts = args.id.split(":");
-    const imdbId = idParts[0];
-    const requestedEpisode = idParts[2] || "1";
-
-    const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`).catch(() => null);
-    const title = res && res.data && res.data.meta ? res.data.meta.name : null;
-
-    if (title) {
-      const kissType = args.type === "movie" ? 2 : 1;
-      const searchResults = await searchKisskh(title, kissType);
-
-      if (searchResults.length > 0) {
-        dramaId = searchResults[0].id;
-        const meta = await getKisskhMeta(dramaId, args.type);
-        if (meta && meta.videos && meta.videos.length > 0) {
-          const targetEp = meta.videos.find(v => v.number === parseInt(requestedEpisode)) || meta.videos[0];
-          const epParts = targetEp.id.split(":");
-          episodeId = epParts[2];
-        }
-      }
-    }
-  } else if (args.id.startsWith("kisskh:")) {
-    const parts = args.id.split(":");
-    episodeId = parts[2];
+  // 1. Manifest
+  if (url === "/manifest.json" || url === "/") {
+    return res.status(200).json(manifest);
   }
 
-  if (!episodeId) return { streams: [] };
+  // 2. Catalog (/catalog/type/id/extra.json)
+  if (url.startsWith("/catalog/")) {
+    const parts = url.replace(".json", "").split("/");
+    const type = parts[2];
+    
+    let search = null;
+    let skip = 0;
 
-  const streams = await getKisskhStream(episodeId);
-  return { streams };
-});
+    if (parts[4]) {
+      const extraParams = new URLSearchParams(parts[4]);
+      search = extraParams.get("search");
+      skip = parseInt(extraParams.get("skip")) || 0;
+    }
 
-// --- ВГРАДЕН СТРАТЕДИЧЕСКИ РУТЕР НА STREMIO ---
-const app = express();
-const addonInterface = builder.getInterface();
-const getRouter = require("stremio-addon-sdk/src/getRouter");
+    const metas = await getKisskhCatalog(type, skip, search);
+    return res.status(200).json({ metas });
+  }
 
-// Ползваме офциално поддържания от SDK-то Express рутер
-const router = getRouter(addonInterface);
+  // 3. Meta (/meta/type/id.json)
+  if (url.startsWith("/meta/")) {
+    const parts = url.replace(".json", "").split("/");
+    const type = parts[2];
+    const id = parts[3];
 
-app.use("/", router);
+    if (!id.startsWith("kisskh:")) return res.status(200).json({ meta: null });
+    const dramaId = id.replace("kisskh:", "");
+    const meta = await getKisskhMeta(dramaId, type);
+    return res.status(200).json({ meta });
+  }
 
-module.exports = app;
+  // 4. Stream (/stream/type/id.json)
+  if (url.startsWith("/stream/")) {
+    const parts = url.replace(".json", "").split("/");
+    const type = parts[2];
+    const id = parts[3];
+
+    let episodeId = null;
+
+    if (id.startsWith("tt")) {
+      const idParts = id.split(":");
+      const imdbId = idParts[0];
+      const requestedEpisode = idParts[2] || "1";
+
+      const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`).catch(() => null);
+      const title = cinemetaRes && cinemetaRes.data && cinemetaRes.data.meta ? cinemetaRes.data.meta.name : null;
+
+      if (title) {
+        const kissType = type === "movie" ? 2 : 1;
+        const searchResults = await searchKisskh(title, kissType);
+
+        if (searchResults.length > 0) {
+          const dramaId = searchResults[0].id;
+          const meta = await getKisskhMeta(dramaId, type);
+          if (meta && meta.videos && meta.videos.length > 0) {
+            const targetEp = meta.videos.find(v => v.number === parseInt(requestedEpisode)) || meta.videos[0];
+            const epParts = targetEp.id.split(":");
+            episodeId = epParts[2];
+          }
+        }
+      }
+    } else if (id.startsWith("kisskh:")) {
+      const epParts = id.split(":");
+      episodeId = epParts[2];
+    }
+
+    if (!episodeId) return res.status(200).json({ streams: [] });
+
+    const streams = await getKisskhStream(episodeId);
+    return res.status(200).json({ streams });
+  }
+
+  return res.status(404).json({ error: "Not Found" });
+};
