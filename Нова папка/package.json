@@ -1,0 +1,20 @@
+{
+  "name": "stremio-kisskh-addon",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
+    "axios": "^1.19.0",
+    "puppeteer": "^25.5.0",
+    "puppeteer-core": "^25.5.0",
+    "stremio-addon-sdk": "^1.6.10"
+  }
+}
