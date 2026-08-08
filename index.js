@@ -56,15 +56,15 @@ async function getBrowser() {
     }
 }
 
-// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID (За да работят субтитрените добавки!) ---
+// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
     try {
         const endpoint = type === "movie" ? "movie" : "series";
-        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim(); // Премахва годината от заглавието за по-добро търсене
+        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
         const res = await axios.get(`https://v3-cinemeta.strem.io/catalog/${endpoint}/top/search=${encodeURIComponent(cleanTitle)}.json`);
         
         if (res && res.data && res.data.metas && res.data.metas.length > 0) {
-            return res.data.metas[0].id; // Връща tt...
+            return res.data.metas[0].id;
         }
     } catch (e) {}
     return null;
@@ -85,15 +85,19 @@ async function searchKisskh(query, kissType) {
 }
 
 async function fetchPageFromKisskh(kissType, page) {
-    const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
-    const response = await axios.get(url, {
-        headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://kisskh.co/"
-        },
-        timeout: 10000
-    });
-    return response.data.data || [];
+    try {
+        const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
+        const response = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://kisskh.co/"
+            },
+            timeout: 10000
+        });
+        return response.data.data || [];
+    } catch (e) {
+        return [];
+    }
 }
 
 async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
@@ -151,7 +155,6 @@ async function getKisskhMeta(dramaId, type) {
         let rawEpisodes = drama.episodes || [];
         rawEpisodes.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
 
-        // Автоматично намираме IMDb ID за заглавието!
         const imdbId = await findIMDbId(drama.title, type);
 
         const episodes = rawEpisodes.map(ep => ({
@@ -170,7 +173,6 @@ async function getKisskhMeta(dramaId, type) {
             videos: episodes
         };
 
-        // Закачаме IMDb ID-то към метаданните (ако е намерено)!
         if (imdbId) {
             metaObj.imdb_id = imdbId;
         }
@@ -209,7 +211,7 @@ async function getKisskhStreamWithPuppeteer(dramaId, episodeId, epNumber) {
         });
 
         const targetUrl = `${KISSKH_BASE}/Drama/Movie/Episode-${epNumber}?id=${dramaId}&ep=${episodeId}`;
-        page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
 
         while (!streamUrl && attempts < 25) {
             await new Promise(r => setTimeout(r, 150));
@@ -256,7 +258,6 @@ builder.defineStreamHandler(async (args) => {
         const imdbId = idParts[0];
         const requestedEpisode = idParts[2] || "1";
 
-        // Заявка от Cinemeta
         const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`).catch(() => null);
         const title = res && res.data && res.data.meta ? res.data.meta.name : null;
 
@@ -288,13 +289,14 @@ builder.defineStreamHandler(async (args) => {
     return { streams };
 });
 
-// Vercel / Local
+// --- СТАРТИРАНЕ НА СЪРВЪРА ( Render / Local ) ---
 const addonInterface = builder.getInterface();
 module.exports = (req, res) => {
     addonInterface.get(req, res);
 };
 
 if (!process.env.VERCEL) {
-    serveHTTP(addonInterface, { port: 7000 });
-    console.log("🚀 Сървърът с IMDb метаданни за субтитри работи на: http://127.0.0.1:7000/manifest.json");
+    const PORT = process.env.PORT || 7000;
+    serveHTTP(addonInterface, { port: PORT });
+    console.log(`🚀 Сървърът работи на порт: ${PORT}`);
 }
