@@ -159,6 +159,7 @@ async function getKisskhMeta(dramaId, type) {
   }
 }
 
+// --- ИЗВЛИЧАНЕ НА СТРИЙМ ---
 async function getKisskhStream(episodeId) {
   try {
     const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
@@ -180,7 +181,6 @@ async function getKisskhStream(episodeId) {
 
 // --- VERCEL SERVERLESS HANDLER ---
 module.exports = async (req, res) => {
-  // CORS хедъри за Stremio
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
   res.setHeader("Content-Type", "application/json");
@@ -192,7 +192,7 @@ module.exports = async (req, res) => {
     return res.status(200).json(manifest);
   }
 
-  // 2. Catalog (/catalog/type/id/extra.json)
+  // 2. Catalog
   if (url.startsWith("/catalog/")) {
     const parts = url.replace(".json", "").split("/");
     const type = parts[2];
@@ -210,7 +210,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ metas });
   }
 
-  // 3. Meta (/meta/type/id.json)
+  // 3. Meta
   if (url.startsWith("/meta/")) {
     const parts = url.replace(".json", "").split("/");
     const type = parts[2];
@@ -222,7 +222,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ meta });
   }
 
-  // 4. Stream (/stream/type/id.json)
+  // 4. Stream
   if (url.startsWith("/stream/")) {
     const parts = url.replace(".json", "").split("/");
     const type = parts[2];
