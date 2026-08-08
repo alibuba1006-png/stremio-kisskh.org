@@ -35,19 +35,6 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// --- BROWSER (За Vercel Serverless) ---
-async function getBrowser() {
-  const puppeteerCore = require("puppeteer-core");
-  const chromium = require("@sparticuz/chromium");
-  return await puppeteerCore.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
-    headless: chromium.headless,
-    ignoreHTTPSErrors: true,
-  });
-}
-
 // --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
   try {
@@ -171,55 +158,23 @@ async function getKisskhMeta(dramaId, type) {
   }
 }
 
-// --- ПРЕХВАЩАНЕ НА СТРИЙМ С PUPPETEER ---
-async function getKisskhStreamWithPuppeteer(dramaId, episodeId, epNumber) {
-  let browser = null;
-  let page = null;
-  let streamUrl = null;
-  let attempts = 0;
-
+// --- ИЗВЛИЧАНЕ НА СТРИЙМ ЧРЕЗ ДИРЕКТНО API (Без Puppeteer за Serverless) ---
+async function getKisskhStream(episodeId) {
   try {
-    browser = await getBrowser();
-    page = await browser.newPage();
-
-    await page.setRequestInterception(true);
-
-    page.on("request", req => {
-      const url = req.url();
-      const resourceType = req.resourceType();
-
-      if (url.includes(".m3u8") && !streamUrl) {
-        streamUrl = url;
-        req.continue();
-      } else if (["image", "stylesheet", "font", "media"].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
+    const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
+      headers: { "Referer": "https://kisskh.co/" },
+      timeout: 8000
     });
 
-    const targetUrl = `${KISSKH_BASE}/Drama/Movie/Episode-${epNumber}?id=${dramaId}&ep=${episodeId}`;
-    page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 8000 }).catch(() => {});
-
-    while (!streamUrl && attempts < 25) {
-      await new Promise(r => setTimeout(r, 150));
-      attempts++;
+    if (response.data && response.data.Video) {
+      return [{
+        title: "KissKH HD Stream",
+        url: response.data.Video
+      }];
     }
-
-  } catch (err) {
-    console.error("Puppeteer Error:", err.message);
-  } finally {
-    if (page) await page.close().catch(() => {});
-    if (browser) await browser.close().catch(() => {});
+  } catch (e) {
+    console.error("Stream Fetch Error:", e.message);
   }
-
-  if (streamUrl) {
-    return [{
-      title: "KissKH HD Stream",
-      url: streamUrl
-    }];
-  }
-
   return [];
 }
 
@@ -239,7 +194,7 @@ builder.defineMetaHandler(async (args) => {
 });
 
 builder.defineStreamHandler(async (args) => {
-  let dramaId, episodeId, epNumber = "1";
+  let dramaId, episodeId;
 
   if (args.id.startsWith("tt")) {
     const idParts = args.id.split(":");
@@ -260,20 +215,17 @@ builder.defineStreamHandler(async (args) => {
           const targetEp = meta.videos.find(v => v.number === parseInt(requestedEpisode)) || meta.videos[0];
           const epParts = targetEp.id.split(":");
           episodeId = epParts[2];
-          epNumber = targetEp.number.toString();
         }
       }
     }
   } else if (args.id.startsWith("kisskh:")) {
     const parts = args.id.split(":");
-    dramaId = parts[1];
     episodeId = parts[2];
-    epNumber = parts[3] || "1";
   }
 
-  if (!dramaId || !episodeId) return { streams: [] };
+  if (!episodeId) return { streams: [] };
 
-  const streams = await getKisskhStreamWithPuppeteer(dramaId, episodeId, epNumber);
+  const streams = await getKisskhStream(episodeId);
   return { streams };
 });
 
@@ -281,7 +233,6 @@ builder.defineStreamHandler(async (args) => {
 const addonInterface = builder.getInterface();
 
 module.exports = (req, res) => {
-  // Добавяме това за случаите, в които Vercel подава заявка към коренната директория
   if (req.url === "/" || !req.url) {
     req.url = "/manifest.json";
   }
