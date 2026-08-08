@@ -1,3 +1,4 @@
+const express = require("express");
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 
@@ -233,16 +234,14 @@ builder.defineStreamHandler(async (args) => {
   return { streams };
 });
 
-// --- ЕКСПОРТ ЗА VERCEL SERVERLESS ---
+// --- ВГРАДЕН СТРАТЕДИЧЕСКИ РУТЕР НА STREMIO ---
+const app = express();
 const addonInterface = builder.getInterface();
+const getRouter = require("stremio-addon-sdk/src/getRouter");
 
-module.exports = (req, res) => {
-  // Напасваме заявката специално за Vercel /api/ структурата:
-  let url = req.url.replace(/^\/api/, "");
-  if (!url || url === "/") {
-    url = "/manifest.json";
-  }
-  req.url = url;
+// Ползваме офциално поддържания от SDK-то Express рутер
+const router = getRouter(addonInterface);
 
-  return addonInterface.get(req, res);
-};
+app.use("/", router);
+
+module.exports = app;
