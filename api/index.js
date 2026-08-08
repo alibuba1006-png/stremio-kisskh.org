@@ -32,6 +32,14 @@ const manifest = {
   ]
 };
 
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Referer": "https://kisskh.co/",
+  "Origin": "https://kisskh.co",
+  "Accept": "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9"
+};
+
 // --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
   try {
@@ -50,12 +58,10 @@ async function findIMDbId(title, type) {
 async function searchKisskh(query, kissType) {
   try {
     const url = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
-    const response = await axios.get(url, {
-      headers: { "Referer": "https://kisskh.co/" },
-      timeout: 8000
-    });
+    const response = await axios.get(url, { headers: HEADERS, timeout: 8000 });
     return response.data || [];
   } catch (e) {
+    console.error("Search Error:", e.message);
     return [];
   }
 }
@@ -63,15 +69,14 @@ async function searchKisskh(query, kissType) {
 async function fetchPageFromKisskh(kissType, page) {
   try {
     const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
-    const response = await axios.get(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://kisskh.co/"
-      },
-      timeout: 10000
-    });
-    return response.data.data || [];
+    const response = await axios.get(url, { headers: HEADERS, timeout: 10000 });
+    
+    if (Array.isArray(response.data)) return response.data;
+    if (response.data && Array.isArray(response.data.data)) return response.data.data;
+    
+    return [];
   } catch (e) {
+    console.error(`Fetch Page ${page} Error:`, e.message);
     return [];
   }
 }
@@ -101,12 +106,15 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
     } else {
       const pageSkip = isNaN(skip) ? 0 : skip;
       const startPage = Math.floor(pageSkip / 10) + 1;
+      
       const [data1, data2] = await Promise.all([
         fetchPageFromKisskh(kissType, startPage),
         fetchPageFromKisskh(kissType, startPage + 1)
       ]);
       dramas = [...data1, ...data2];
     }
+
+    console.log(`Fetched ${dramas.length} items for catalog: ${type}`);
 
     return dramas.map(item => ({
       id: `kisskh:${item.id}`,
@@ -116,6 +124,7 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
       description: `Епизоди: ${item.episodesCount || (type === "movie" ? "1" : "N/A")}`
     }));
   } catch (error) {
+    console.error("Catalog Processing Error:", error.message);
     return [];
   }
 }
@@ -123,10 +132,7 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
 async function getKisskhMeta(dramaId, type) {
   try {
     const url = `${KISSKH_BASE}/api/DramaList/Drama/${dramaId}?sub=true`;
-    const response = await axios.get(url, {
-      headers: { "Referer": "https://kisskh.co/" },
-      timeout: 10000
-    });
+    const response = await axios.get(url, { headers: HEADERS, timeout: 10000 });
     const drama = response.data;
 
     let rawEpisodes = drama.episodes || [];
@@ -156,6 +162,7 @@ async function getKisskhMeta(dramaId, type) {
 
     return metaObj;
   } catch (error) {
+    console.error("Meta Error:", error.message);
     return null;
   }
 }
@@ -163,7 +170,7 @@ async function getKisskhMeta(dramaId, type) {
 async function getKisskhStream(episodeId) {
   try {
     const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
-      headers: { "Referer": "https://kisskh.co/" },
+      headers: HEADERS,
       timeout: 8000
     });
 
@@ -192,16 +199,15 @@ module.exports = async (req, res) => {
     return res.status(200).json(manifest);
   }
 
-  // 2. Catalog (/catalog/type/id.json или /catalog/type/id/extra.json)
+  // 2. Catalog
   if (url.startsWith("/catalog/")) {
     const cleanPath = url.replace(".json", "");
-    const parts = cleanPath.split("/").filter(Boolean); // ["catalog", "series", "kisskh_series_catalog", "skip=10"]
+    const parts = cleanPath.split("/").filter(Boolean);
     
-    const type = parts[1]; // "series" или "movie"
+    const type = parts[1];
     let search = null;
     let skip = 0;
 
-    // Парсване на extra параметрите ако съществуват
     if (parts[3]) {
       const extraParams = new URLSearchParams(parts[3]);
       search = extraParams.get("search");
@@ -212,7 +218,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ metas });
   }
 
-  // 3. Meta (/meta/type/id.json)
+  // 3. Meta
   if (url.startsWith("/meta/")) {
     const cleanPath = url.replace(".json", "");
     const parts = cleanPath.split("/").filter(Boolean);
@@ -225,7 +231,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ meta });
   }
 
-  // 4. Stream (/stream/type/id.json)
+  // 4. Stream
   if (url.startsWith("/stream/")) {
     const cleanPath = url.replace(".json", "");
     const parts = cleanPath.split("/").filter(Boolean);
