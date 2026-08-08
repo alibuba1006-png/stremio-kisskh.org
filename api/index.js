@@ -229,13 +229,12 @@ builder.defineStreamHandler(async (args) => {
   return { streams };
 });
 
-// --- VERCEL ROUTER HANDLER ---
+// --- ЕКСПОРТ ЗА VERCEL ---
 const addonInterface = builder.getInterface();
 
 module.exports = (req, res) => {
-  // Нагласяме пътя, тъй като заявката идва през /api/...
-  req.url = req.url.replace(/^\/api/, "");
-  if (req.url === "" || req.url === "/") {
+  // Ако отвориш чистия домейн без път, зарежда manifest.json
+  if (!req.url || req.url === "/") {
     req.url = "/manifest.json";
   }
   return addonInterface.get(req, res);
