@@ -64,15 +64,19 @@ async function searchKisskh(query, kissType) {
 }
 
 async function fetchPageFromKisskh(kissType, page) {
-  const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
-  const response = await axios.get(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-      "Referer": "https://kisskh.co/"
-    },
-    timeout: 10000
-  });
-  return response.data.data || [];
+  try {
+    const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
+    const response = await axios.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://kisskh.co/"
+      },
+      timeout: 10000
+    });
+    return response.data.data || [];
+  } catch (e) {
+    return [];
+  }
 }
 
 async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
@@ -100,8 +104,8 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
     } else {
       const startPage = Math.floor(skip / 10) + 1;
       const [data1, data2] = await Promise.all([
-        fetchPageFromKisskh(kissType, startPage).catch(() => []),
-        fetchPageFromKisskh(kissType, startPage + 1).catch(() => [])
+        fetchPageFromKisskh(kissType, startPage),
+        fetchPageFromKisskh(kissType, startPage + 1)
       ]);
       dramas = [...data1, ...data2];
     }
@@ -229,13 +233,16 @@ builder.defineStreamHandler(async (args) => {
   return { streams };
 });
 
-// --- ЕКСПОРТ ЗА VERCEL ---
+// --- ЕКСПОРТ ЗА VERCEL SERVERLESS ---
 const addonInterface = builder.getInterface();
 
 module.exports = (req, res) => {
-  // Ако отвориш чистия домейн без път, зарежда manifest.json
-  if (!req.url || req.url === "/") {
-    req.url = "/manifest.json";
+  // Напасваме заявката специално за Vercel /api/ структурата:
+  let url = req.url.replace(/^\/api/, "");
+  if (!url || url === "/") {
+    url = "/manifest.json";
   }
+  req.url = url;
+
   return addonInterface.get(req, res);
 };
