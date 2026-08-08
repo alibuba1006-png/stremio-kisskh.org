@@ -56,15 +56,15 @@ async function getBrowser() {
     }
 }
 
-// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
+// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID (За да работят субтитрените добавки!) ---
 async function findIMDbId(title, type) {
     try {
         const endpoint = type === "movie" ? "movie" : "series";
-        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
+        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim(); // Премахва годината от заглавието за по-добро търсене
         const res = await axios.get(`https://v3-cinemeta.strem.io/catalog/${endpoint}/top/search=${encodeURIComponent(cleanTitle)}.json`);
         
         if (res && res.data && res.data.metas && res.data.metas.length > 0) {
-            return res.data.metas[0].id;
+            return res.data.metas[0].id; // Връща tt...
         }
     } catch (e) {}
     return null;
@@ -155,6 +155,7 @@ async function getKisskhMeta(dramaId, type) {
         let rawEpisodes = drama.episodes || [];
         rawEpisodes.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
 
+        // Автоматично намираме IMDb ID за заглавието!
         const imdbId = await findIMDbId(drama.title, type);
 
         const episodes = rawEpisodes.map(ep => ({
@@ -173,6 +174,7 @@ async function getKisskhMeta(dramaId, type) {
             videos: episodes
         };
 
+        // Закачаме IMDb ID-то към метаданните (ако е намерено)!
         if (imdbId) {
             metaObj.imdb_id = imdbId;
         }
@@ -258,6 +260,7 @@ builder.defineStreamHandler(async (args) => {
         const imdbId = idParts[0];
         const requestedEpisode = idParts[2] || "1";
 
+        // Заявка от Cinemeta
         const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`).catch(() => null);
         const title = res && res.data && res.data.meta ? res.data.meta.name : null;
 
@@ -289,7 +292,7 @@ builder.defineStreamHandler(async (args) => {
     return { streams };
 });
 
-// --- СТАРТИРАНЕ НА СЪРВЪРА ( Render / Local ) ---
+// Vercel / Render / Local
 const addonInterface = builder.getInterface();
 module.exports = (req, res) => {
     addonInterface.get(req, res);
@@ -298,5 +301,5 @@ module.exports = (req, res) => {
 if (!process.env.VERCEL) {
     const PORT = process.env.PORT || 7000;
     serveHTTP(addonInterface, { port: PORT });
-    console.log(`🚀 Сървърът работи на порт: ${PORT}`);
+    console.log(`🚀 Сървърът с IMDb метаданни за субтитри работи на порт: ${PORT}`);
 }
