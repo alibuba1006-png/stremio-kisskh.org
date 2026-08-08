@@ -99,7 +99,8 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
         }
       });
     } else {
-      const startPage = Math.floor(skip / 10) + 1;
+      const pageSkip = isNaN(skip) ? 0 : skip;
+      const startPage = Math.floor(pageSkip / 10) + 1;
       const [data1, data2] = await Promise.all([
         fetchPageFromKisskh(kissType, startPage),
         fetchPageFromKisskh(kissType, startPage + 1)
@@ -159,7 +160,6 @@ async function getKisskhMeta(dramaId, type) {
   }
 }
 
-// --- ИЗВЛИЧАНЕ НА СТРИЙМ ---
 async function getKisskhStream(episodeId) {
   try {
     const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
@@ -192,16 +192,18 @@ module.exports = async (req, res) => {
     return res.status(200).json(manifest);
   }
 
-  // 2. Catalog
+  // 2. Catalog (/catalog/type/id.json или /catalog/type/id/extra.json)
   if (url.startsWith("/catalog/")) {
-    const parts = url.replace(".json", "").split("/");
-    const type = parts[2];
+    const cleanPath = url.replace(".json", "");
+    const parts = cleanPath.split("/").filter(Boolean); // ["catalog", "series", "kisskh_series_catalog", "skip=10"]
     
+    const type = parts[1]; // "series" или "movie"
     let search = null;
     let skip = 0;
 
-    if (parts[4]) {
-      const extraParams = new URLSearchParams(parts[4]);
+    // Парсване на extra параметрите ако съществуват
+    if (parts[3]) {
+      const extraParams = new URLSearchParams(parts[3]);
       search = extraParams.get("search");
       skip = parseInt(extraParams.get("skip")) || 0;
     }
@@ -210,27 +212,29 @@ module.exports = async (req, res) => {
     return res.status(200).json({ metas });
   }
 
-  // 3. Meta
+  // 3. Meta (/meta/type/id.json)
   if (url.startsWith("/meta/")) {
-    const parts = url.replace(".json", "").split("/");
-    const type = parts[2];
-    const id = parts[3];
+    const cleanPath = url.replace(".json", "");
+    const parts = cleanPath.split("/").filter(Boolean);
+    const type = parts[1];
+    const id = parts[2];
 
-    if (!id.startsWith("kisskh:")) return res.status(200).json({ meta: null });
+    if (!id || !id.startsWith("kisskh:")) return res.status(200).json({ meta: null });
     const dramaId = id.replace("kisskh:", "");
     const meta = await getKisskhMeta(dramaId, type);
     return res.status(200).json({ meta });
   }
 
-  // 4. Stream
+  // 4. Stream (/stream/type/id.json)
   if (url.startsWith("/stream/")) {
-    const parts = url.replace(".json", "").split("/");
-    const type = parts[2];
-    const id = parts[3];
+    const cleanPath = url.replace(".json", "");
+    const parts = cleanPath.split("/").filter(Boolean);
+    const type = parts[1];
+    const id = parts[2];
 
     let episodeId = null;
 
-    if (id.startsWith("tt")) {
+    if (id && id.startsWith("tt")) {
       const idParts = id.split(":");
       const imdbId = idParts[0];
       const requestedEpisode = idParts[2] || "1";
@@ -252,7 +256,7 @@ module.exports = async (req, res) => {
           }
         }
       }
-    } else if (id.startsWith("kisskh:")) {
+    } else if (id && id.startsWith("kisskh:")) {
       const epParts = id.split(":");
       episodeId = epParts[2];
     }
