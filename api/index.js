@@ -158,7 +158,7 @@ async function getKisskhMeta(dramaId, type) {
   }
 }
 
-// --- ИЗВЛИЧАНЕ НА СТРИЙМ ЧРЕЗ ДИРЕКТНО API (Без Puppeteer за Serverless) ---
+// --- ИЗВЛИЧАНЕ НА СТРИЙМ ---
 async function getKisskhStream(episodeId) {
   try {
     const response = await axios.get(`${KISSKH_BASE}/api/DramaList/Episode/${episodeId}.json?sub=true`, {
@@ -229,11 +229,13 @@ builder.defineStreamHandler(async (args) => {
   return { streams };
 });
 
-// --- ЕКСПОРТ ЗА VERCEL SERVERLESS ---
+// --- VERCEL ROUTER HANDLER ---
 const addonInterface = builder.getInterface();
 
 module.exports = (req, res) => {
-  if (req.url === "/" || !req.url) {
+  // Нагласяме пътя, тъй като заявката идва през /api/...
+  req.url = req.url.replace(/^\/api/, "");
+  if (req.url === "" || req.url === "/") {
     req.url = "/manifest.json";
   }
   return addonInterface.get(req, res);
