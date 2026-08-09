@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "7.4.0",
+    version: "7.5.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -189,11 +189,15 @@ app.use((req, res, next) => {
     next();
 });
 
+// Премахване на 404 грешките за фавикон
+app.get("/favicon.ico", (req, res) => res.sendStatus(204));
+app.get("/favicon.png", (req, res) => res.sendStatus(204));
+
 app.get("/manifest.json", (req, res) => {
     res.json(manifest);
 });
 
-// Универсален каталог рутер, който поддържа заявки както с параметри, така и без тях
+// Универсален каталог рутер
 app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     try {
         const { type } = req.params;
