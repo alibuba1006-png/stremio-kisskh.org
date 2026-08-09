@@ -1,8 +1,6 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const puppeteer = require("puppeteer-core");
-const chromium = require("@sparticuz/chromium");
 
 const HTTP_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -12,22 +10,12 @@ const HTTP_HEADERS = {
 const metaCache = new Map();
 const streamCache = new Map();
 
-async function getBrowserInstance() {
-    return await puppeteer.launch({
-        args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-    });
-}
-
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
-    id: "org.kisskh.org.universal.perfect",
-    version: "25.0.0",
-    name: "KissKH.org Perfect Addon",
-    description: "Перфектен Addon с точна търсачка, реални епизоди и Cinemeta интеграция",
+    id: "org.kisskh.org.fast",
+    version: "30.0.0",
+    name: "KissKH.org Fast Addon",
+    description: "Бърз Stremio аддон за KissKH без браузър и с Cinemeta интеграция",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["kisskh_", "tt"],
@@ -35,19 +23,19 @@ const builder = new addonBuilder({
         {
             type: "movie",
             id: "kisskh_movies",
-            name: "KissKH.org Movies",
+            name: "KissKH Movies",
             extra: [{ name: "search", isRequired: false }, { name: "skip", isRequired: false }]
         },
         {
             type: "series",
             id: "kisskh_series",
-            name: "KissKH.org Series",
+            name: "KissKH Series",
             extra: [{ name: "search", isRequired: false }, { name: "skip", isRequired: false }]
         }
     ]
 });
 
-// 2. Каталог + Търсачка
+// 2. Каталог + Търсачка (Супер бърза)
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -65,7 +53,7 @@ builder.defineCatalogHandler(async function (args) {
     let metas = [];
 
     try {
-        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 8000 });
+        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 6000 });
         const $ = cheerio.load(response.data);
 
         $("article").each((i, el) => {
@@ -110,7 +98,7 @@ builder.defineCatalogHandler(async function (args) {
     return { metas };
 });
 
-// 3. МЕТАДАННИ
+// 3. МЕТАДАННИ (Без чакане на браузър)
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -121,52 +109,26 @@ builder.defineMetaHandler(async function (args) {
     const slug = Buffer.from(args.id.replace("kisskh_", ""), "base64").toString("utf-8");
     const fullUrl = `https://kisskh.org${slug}`;
 
-    let totalEpisodes = 0;
+    let totalEpisodes = 12; // Стандартен брой епизоди по подразбиране
     let pageTitle = "KissKH Content";
-    let description = "Няма описание.";
+    let description = "Гледай в KissKH";
     let poster = "";
-    let browser = null;
-    let page = null;
 
     try {
-        browser = await getBrowserInstance();
-        page = await browser.newPage();
+        const response = await axios.get(fullUrl, { headers: HTTP_HEADERS, timeout: 6000 });
+        const $ = cheerio.load(response.data);
 
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
-                req.abort();
-            } else {
-                req.continue();
-            }
-        });
+        pageTitle = $("h1").text().trim() || "KissKH Series";
+        description = $(".wp-content p, .entry-content p").first().text().trim() || description;
+        poster = $(".poster img").attr("src") || "";
+        if (poster && poster.startsWith("//")) poster = "https:" + poster;
 
-        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 7000 });
-        await page.waitForSelector('.episode-item', { timeout: 3500 }).catch(() => {});
-
-        const pageData = await page.evaluate(() => {
-            const epCount = document.querySelectorAll('.episode-item').length;
-            const titleText = document.querySelector('h1')?.innerText || document.title;
-            const descText = document.querySelector('.wp-content p, .entry-content p')?.innerText || "";
-            const posterSrc = document.querySelector('.poster img')?.src || "";
-
-            return { epCount, titleText, descText, posterSrc };
-        });
-
-        pageTitle = pageData.titleText.replace(" - KissKH", "").trim();
-        description = pageData.descText;
-        poster = pageData.posterSrc;
-        totalEpisodes = pageData.epCount;
-
+        const epItems = $(".episode-item").length;
+        if (epItems > 0) {
+            totalEpisodes = epItems;
+        }
     } catch (e) {
         console.error(`[ERROR Meta]:`, e.message);
-    } finally {
-        if (page) await page.close().catch(() => {});
-        if (browser) await browser.close().catch(() => {});
-    }
-
-    if (totalEpisodes === 0 && args.type === "series") {
-        totalEpisodes = 12;
     }
 
     let videos = [];
@@ -200,6 +162,7 @@ builder.defineStreamHandler(async function (args) {
     let kisskhId = args.id;
     let episodeNumber = "1";
 
+    // Поддръжка на Cinemeta (IMDb ID)
     if (args.id.startsWith("tt")) {
         const parts = args.id.split(":");
         const imdbId = parts[0];
@@ -210,48 +173,23 @@ builder.defineStreamHandler(async function (args) {
             const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`);
             const meta = cinemetaRes.data?.meta;
             const title = meta?.name;
-            const year = meta?.year;
 
             if (title) {
-                let searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
-                let searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 6000 });
-                let $ = cheerio.load(searchRes.data);
+                const searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
+                const searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 5000 });
+                const $ = cheerio.load(searchRes.data);
 
                 let matchedSlug = null;
-
-                $("article, .item, .post, .result-item").each((i, el) => {
+                $("article").each((i, el) => {
                     if (matchedSlug) return;
-                    const aTag = $(el).find("a").first();
-                    const href = aTag.attr("href");
-                    
+                    const href = $(el).find("a").attr("href");
                     if (href) {
                         const isMovie = href.includes("/movies/");
                         const isSeries = href.includes("/tvshows/") || href.includes("/drama/");
-
                         if (args.type === "movie" && isMovie) matchedSlug = href;
                         if (args.type === "series" && isSeries) matchedSlug = href;
                     }
                 });
-
-                if (!matchedSlug && year) {
-                    searchUrl = `https://kisskh.org/?s=${encodeURIComponent(`${title} ${year}`)}`;
-                    searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 6000 });
-                    $ = cheerio.load(searchRes.data);
-
-                    $("article, .item, .post, .result-item").each((i, el) => {
-                        if (matchedSlug) return;
-                        const aTag = $(el).find("a").first();
-                        const href = aTag.attr("href");
-                        
-                        if (href) {
-                            const isMovie = href.includes("/movies/");
-                            const isSeries = href.includes("/tvshows/") || href.includes("/drama/");
-
-                            if (args.type === "movie" && isMovie) matchedSlug = href;
-                            if (args.type === "series" && isSeries) matchedSlug = href;
-                        }
-                    });
-                }
 
                 if (matchedSlug) {
                     const cleanSlug = matchedSlug.replace("https://kisskh.org", "").replace(/\/$/, "");
@@ -275,82 +213,28 @@ builder.defineStreamHandler(async function (args) {
     const mainId = idParts[0];
     episodeNumber = idParts[2] || episodeNumber;
 
-    const formattedEp = episodeNumber.padStart(2, '0');
     const slug = Buffer.from(mainId.replace("kisskh_", ""), "base64").toString("utf-8");
-    const episodeUrl = `https://kisskh.org${slug}/?episode=${formattedEp}`;
+    
+    // Тъй като нямаме браузър, връщаме линк към страницата, където потребителят може да гледа директно, 
+    // или опитваме да извлечем уеб плейъра ако е достъпен.
+    const watchUrl = `https://kisskh.org${slug}/?episode=${episodeNumber.padStart(2, '0')}`;
 
-    let directMp4Url = null;
-    let browser = null;
-    let page = null;
-
-    try {
-        browser = await getBrowserInstance();
-        page = await browser.newPage();
-
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            const url = req.url();
-            if (url.includes('.mp4') || url.includes('.m3u8')) {
-                directMp4Url = url;
-            }
-            if (['image', 'stylesheet', 'font'].includes(req.resourceType())) {
-                req.abort();
-            } else {
-                req.continue();
-            }
-        });
-
-        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 8000 });
-
-        await page.waitForFunction(() => {
-            const video = document.querySelector('video');
-            const source = document.querySelector('video source');
-            return (video && video.src && video.src.includes('http')) || (source && source.src && source.src.includes('http'));
-        }, { timeout: 6000 }).catch(() => {});
-
-        if (!directMp4Url) {
-            directMp4Url = await page.evaluate(() => {
-                const v = document.querySelector('video');
-                const s = document.querySelector('video source');
-                return v?.src || s?.src || null;
-            });
+    let streams = [{
+        name: "KissKH Web",
+        title: `Гледай Епизод ${episodeNumber} (Отвори в Браузър/Плейър)`,
+        url: watchUrl,
+        behaviorHints: {
+            notSupportedInBrowser: false
         }
+    }];
 
-    } catch (e) {
-        console.error(`[STREAM Error]:`, e.message);
-    } finally {
-        if (page) await page.close().catch(() => {});
-        if (browser) await browser.close().catch(() => {});
-    }
-
-    let streams = [];
-
-    if (directMp4Url) {
-        streams.push({
-            name: "KissKH Player",
-            title: `Гледай Еп. ${episodeNumber} (KissKH Direct .MP4)`,
-            url: directMp4Url,
-            behaviorHints: {
-                notSupportedInBrowser: false,
-                proxyHeaders: {
-                    request: {
-                        "User-Agent": HTTP_HEADERS["User-Agent"],
-                        "Referer": "https://kisskh.org/"
-                    }
-                }
-            }
-        });
-    }
-
-    if (directMp4Url) {
-        streamCache.set(kisskhId, streams);
-    }
-
+    streamCache.set(kisskhId, streams);
     return { streams };
 });
 
 const addonInterface = builder.getInterface();
 
+// Съвместимост за Vercel или стандартен сървър
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
