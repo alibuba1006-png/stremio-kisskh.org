@@ -1,42 +1,33 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 
 const builder = new addonBuilder({
-    id: "org.kisskh.org.test",
+    id: "org.kisskh.org.clean",
     version: "1.0.0",
-    name: "KissKH Test Addon",
-    description: "Тестов аддон",
+    name: "Clean KissKH Addon",
+    description: "Напълно чист тестов аддон",
     resources: ["catalog"],
     types: ["movie"],
-    catalogs: [
-        {
-            type: "movie",
-            id: "test_catalog",
-            name: "Test Catalog"
-        }
-    ]
+    catalogs: [{ type: "movie", id: "test", name: "Test" }]
 });
 
-builder.defineCatalogHandler(async (args) => {
-    return { metas: [{ id: "test_1", type: "movie", name: "Test Movie" }] };
+builder.defineCatalogHandler(() => {
+    return { metas: [{ id: "1", type: "movie", name: "Работи!" }] };
 });
 
 const addonInterface = builder.getInterface();
 
 module.exports = async (req, res) => {
+    // ЗАДЪЛЖИТЕЛНИ HEADERS
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
     
-    // ВРЪЩАМЕ МАНИФЕСТА ДИРЕКТНО
-    if (req.url === '/manifest.json' || req.url === '/') {
+    // МАНУАЛНО РЕШЕНИЕ ЗА MANIFEST
+    if (req.url === '/manifest.json') {
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify(addonInterface.manifest));
     }
     
-    // ЗА КАТАЛОГА
-    if (req.url.includes('catalog')) {
-        res.setHeader('Content-Type', 'application/json');
-        return res.end(JSON.stringify(await addonInterface.get('catalog', 'movie', 'test_catalog')));
-    }
-
-    res.statusCode = 404;
-    res.end('Not Found');
+    // ТЕСТОВ ОТГОВОР
+    res.setHeader('Content-Type', 'text/plain');
+    res.end('Addon server is running! Add /manifest.json to the link in Stremio.');
 };
