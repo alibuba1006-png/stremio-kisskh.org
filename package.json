@@ -2,6 +2,7 @@
   "name": "kisskh-stremio-addon",
   "version": "5.0.0",
   "main": "index.js",
+  "type": "module",
   "dependencies": {
     "@sparticuz/chromium": "^121.0.0",
     "axios": "^1.7.0",
