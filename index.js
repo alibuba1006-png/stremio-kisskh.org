@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "7.5.0",
+    version: "7.6.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -169,7 +169,7 @@ async function getKisskhStream(episodeId) {
             timeout: 5000
         });
         
-        const videoUrl = response.data?.video || response.data?.link || response.data?.source;
+        const videoUrl = response.data?.video || response.data?.link || response.data?.source || response.data?.SUB;
         if (videoUrl) {
             return [{
                 title: "KissKH HD Stream",
@@ -189,7 +189,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Премахване на 404 грешките за фавикон
 app.get("/favicon.ico", (req, res) => res.sendStatus(204));
 app.get("/favicon.png", (req, res) => res.sendStatus(204));
 
@@ -197,7 +196,7 @@ app.get("/manifest.json", (req, res) => {
     res.json(manifest);
 });
 
-// Универсален каталог рутер
+// Каталог рутер
 app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     try {
         const { type } = req.params;
@@ -249,14 +248,26 @@ app.get("/meta/:type/:id(*).json", async (req, res) => {
     }
 });
 
-// Стрийм рутер
+// Стрийм рутер с подобрено разпознаване на епизодите
 app.get("/stream/:type/:id(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
         const cleanId = id.replace(/\.json$/, "");
         let episodeId = null;
 
-        if (cleanId.startsWith("tt")) {
+        if (cleanId.startsWith("kisskh:")) {
+            const parts = cleanId.split(":");
+            if (parts[2]) {
+                episodeId = parts[2];
+            } else if (parts[1]) {
+                // Ако липсва епизод ID, взимаме първия епизод от сериала
+                const meta = await getKisskhMeta(parts[1], type);
+                if (meta && meta.videos && meta.videos.length > 0) {
+                    const epParts = meta.videos[0].id.split(":");
+                    episodeId = epParts[2];
+                }
+            }
+        } else if (cleanId.startsWith("tt")) {
             const idParts = cleanId.split(":");
             const imdbId = idParts[0];
             const requestedEpisode = idParts[2] || "1";
@@ -278,9 +289,6 @@ app.get("/stream/:type/:id(*).json", async (req, res) => {
                     }
                 }
             }
-        } else if (cleanId.startsWith("kisskh:")) {
-            const parts = cleanId.split(":");
-            episodeId = parts[2];
         }
 
         if (!episodeId) {
