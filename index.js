@@ -6,7 +6,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "6.1.0",
+    version: "6.2.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -44,7 +44,9 @@ async function findIMDbId(title, type) {
         if (res && res.data && res.data.metas && res.data.metas.length > 0) {
             return res.data.metas[0].id; 
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("findIMDbId Error:", e.message);
+    }
     return null;
 }
 
@@ -57,6 +59,7 @@ async function searchKisskh(query, kissType) {
         });
         return response.data || [];
     } catch (e) {
+        console.error("searchKisskh Error:", e.message);
         return [];
     }
 }
@@ -73,6 +76,7 @@ async function fetchPageFromKisskh(kissType, page) {
         });
         return response.data.data || [];
     } catch (e) {
+        console.error(`fetchPageFromKisskh Error (page ${page}):`, e.message);
         return [];
     }
 }
@@ -115,6 +119,7 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
             description: `Епизоди: ${item.episodesCount || (type === "movie" ? "1" : "N/A")}`
         }));
     } catch (error) {
+        console.error("getKisskhCatalog Error:", error.message);
         return [];
     }
 }
@@ -156,6 +161,7 @@ async function getKisskhMeta(dramaId, type) {
 
         return metaObj;
     } catch (error) {
+        console.error("getKisskhMeta Error:", error.message);
         return null;
     }
 }
@@ -175,7 +181,9 @@ async function getKisskhStream(episodeId) {
                 url: videoUrl
             }];
         }
-    } catch (err) {}
+    } catch (err) {
+        console.error("getKisskhStream Error:", err.message);
+    }
     return [];
 }
 
@@ -188,6 +196,7 @@ builder.defineCatalogHandler(async (args) => {
         const metas = await getKisskhCatalog(args.type, skip, search);
         return { metas };
     } catch (e) {
+        console.error("Catalog Handler Error:", e.message);
         return { metas: [] };
     }
 });
@@ -199,6 +208,7 @@ builder.defineMetaHandler(async (args) => {
         const meta = await getKisskhMeta(dramaId, args.type);
         return { meta };
     } catch (e) {
+        console.error("Meta Handler Error:", e.message);
         return { meta: null };
     }
 });
@@ -239,6 +249,7 @@ builder.defineStreamHandler(async (args) => {
         const streams = await getKisskhStream(episodeId);
         return { streams };
     } catch (e) {
+        console.error("Stream Handler Error:", e.message);
         return { streams: [] };
     }
 });
@@ -247,8 +258,9 @@ export default async function (req, res) {
     try {
         return await addonInterface(req, res);
     } catch (err) {
+        console.error("Vercel Request Handler Error:", err.message, err.stack);
         res.statusCode = 500;
-        res.end(JSON.stringify({ error: "Internal Server Error" }));
+        res.end(JSON.stringify({ error: err.message }));
     }
 }
 
