@@ -1,14 +1,15 @@
 import pkg from "stremio-addon-sdk";
 const { addonBuilder, serveHTTP } = pkg;
+import express from "express";
 import axios from "axios";
 
 const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "8.7.0",
+    version: "8.8.0",
     name: "KissKH Addon",
-    description: "Гледай Азиатски сериали и филми от KissKH в Stremio (с поддръжка за OpenSubtitles)",
+    description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
     types: ["series", "movie"],
     idPrefixes: ["kisskh:", "tt"],
@@ -41,7 +42,6 @@ async function findIMDbId(title, type) {
         const endpoint = type === "movie" ? "movie" : "series";
         const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim(); 
         const res = await axios.get(`https://v3-cinemeta.strem.io/catalog/${endpoint}/top/search=${encodeURIComponent(cleanTitle)}.json`, { timeout: 3000 });
-        
         if (res && res.data && res.data.metas && res.data.metas.length > 0) {
             return res.data.metas[0].id; 
         }
@@ -93,9 +93,7 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
                 dramas = [
                     { id: 4567, title: "Crash Landing on You", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
                     { id: 5120, title: "Goblin", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 7111, title: "Business Proposal", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODg2ZjY4OGItNDYyNS00YzZhLWFiYjAtYTYyNmQwZWY2N2E1XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 8222, title: "All of Us Are Dead", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODJmMzJiODctNGVkMS00MjQ5LThjNDgtNDljNDcxNjNhZDdmXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
+                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
                 ];
             } else {
                 dramas = [
@@ -110,14 +108,9 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
         const filtered = dramas.filter(item => {
             const itemTitle = (item.title || "").toLowerCase();
             const epCount = parseInt(item.episodesCount) || 0;
-            
             if (cleanQuery && !itemTitle.includes(cleanQuery)) return false;
-
-            if (type === "movie") {
-                return item.type === 2 || epCount === 1;
-            } else {
-                return item.type === 1 || epCount > 1;
-            }
+            if (type === "movie") return item.type === 2 || epCount === 1;
+            return item.type === 1 || epCount > 1;
         });
 
         return filtered.map(item => ({
@@ -166,17 +159,13 @@ async function getKisskhMeta(dramaId, type) {
             videos: episodes
         };
 
-        if (imdbId) {
-            metaObj.imdb_id = imdbId;
-        }
-
+        if (imdbId) metaObj.imdb_id = imdbId;
         return metaObj;
     } catch (error) {
         return null;
     }
 }
 
-// --- БЪРЗ API СТРИЙМ (БЕЗ PUPPETEER, ЗА ДА НЯМА СРИВ И ЗАБВЯНЕ) ---
 async function getKisskhStreamApi(episodeId) {
     try {
         const url = `${KISSKH_BASE}/api/DramaList/Episode/${episodeId}`;
@@ -190,88 +179,111 @@ async function getKisskhStreamApi(episodeId) {
         
         const videoUrl = response.data?.video || response.data?.link || response.data?.source || response.data?.SUB;
         if (videoUrl) {
-            return [{
-                title: "KissKH HD Stream",
-                url: videoUrl
-            }];
+            return [{ title: "KissKH HD Stream", url: videoUrl }];
         }
     } catch (err) {}
     return [];
 }
 
-builder.defineCatalogHandler(async (args) => {
+const app = express();
+
+app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    if (req.method === "OPTIONS") return res.sendStatus(200);
+    next();
+});
+
+app.get("/favicon.ico", (req, res) => res.sendStatus(204));
+app.get("/favicon.png", (req, res) => res.sendStatus(204));
+
+app.get("/manifest.json", (req, res) => {
+    res.json(manifest);
+});
+
+app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     try {
-        const skip = (args.extra && args.extra.skip) ? parseInt(args.extra.skip) : 0;
-        const search = (args.extra && args.extra.search) ? args.extra.search : null;
-        const metas = await getKisskhCatalog(args.type, skip, search);
-        return { metas };
+        const { type } = req.params;
+        let skip = 0;
+        let search = null;
+        let extraStr = req.params.extra || "";
+        extraStr = extraStr.replace(/\.json$/, "");
+
+        if (extraStr) {
+            extraStr.split("&").forEach(part => {
+                const [key, val] = part.split("=");
+                if (key === "skip") skip = parseInt(val) || 0;
+                if (key === "search") search = decodeURIComponent(val);
+            });
+        }
+
+        const metas = await getKisskhCatalog(type, skip, search);
+        res.json({ metas });
     } catch (e) {
-        return { metas: [] };
+        res.json({ metas: [] });
     }
 });
 
-builder.defineMetaHandler(async (args) => {
+app.get("/meta/:type/:id(*).json", async (req, res) => {
     try {
-        if (!args.id.startsWith("kisskh:")) return { meta: null };
-        const dramaId = args.id.replace("kisskh:", "");
-        const meta = await getKisskhMeta(dramaId, args.type);
-        return { meta };
+        const { type, id } = req.params;
+        const cleanId = id.replace(/\.json$/, "").replace("kisskh:", "");
+        const meta = await getKisskhMeta(cleanId, type);
+        res.json({ meta });
     } catch (e) {
-        return { meta: null };
+        res.json({ meta: null });
     }
 });
 
-builder.defineStreamHandler(async (args) => {
+app.get("/stream/:type/:id(*).json", async (req, res) => {
     try {
+        const { id, type } = req.params;
         let episodeId = null;
+        const cleanId = id.replace(/\.json$/, "");
 
-        if (args.id.startsWith("tt")) {
-            const idParts = args.id.split(":");
+        if (cleanId.startsWith("tt")) {
+            const idParts = cleanId.split(":");
             const imdbId = idParts[0];
             const requestedEpisode = idParts[2] || "1";
 
-            const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`).catch(() => null);
-            const title = res && res.data && res.data.meta ? res.data.meta.name : null;
+            const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`).catch(() => null);
+            const title = cinemetaRes?.data?.meta?.name;
 
             if (title) {
-                const kissType = args.type === "movie" ? 2 : 1;
+                const kissType = type === "movie" ? 2 : 1;
                 const searchResults = await searchKisskh(title, kissType);
-
                 if (searchResults.length > 0) {
                     const dramaId = searchResults[0].id;
-                    const meta = await getKisskhMeta(dramaId, args.type);
+                    const meta = await getKisskhMeta(dramaId, type);
                     if (meta && meta.videos && meta.videos.length > 0) {
                         const targetEp = meta.videos.find(v => v.number === parseInt(requestedEpisode)) || meta.videos[0];
-                        const epParts = targetEp.id.split(":");
-                        episodeId = epParts[2];
+                        episodeId = targetEp.id.split(":")[2];
                     }
                 }
             }
-        } else if (args.id.startsWith("kisskh:")) {
-            const parts = args.id.split(":");
+        } else if (cleanId.startsWith("kisskh:")) {
+            const parts = cleanId.split(":");
             episodeId = parts[2];
         }
 
-        if (!episodeId) return { streams: [] };
+        if (!episodeId) {
+            return res.json({ streams: [] });
+        }
 
         const streams = await getKisskhStreamApi(episodeId);
-        return { streams };
+        res.json({ streams });
     } catch (e) {
-        return { streams: [] };
+        res.json({ streams: [] });
     }
 });
 
-const addonInterface = builder.getInterface();
-
-export default function (req, res) {
-    try {
-        addonInterface.get(req, res);
-    } catch (e) {
-        res.status(500).json({ error: "Internal Server Error" });
-    }
-}
+app.get("/", (req, res) => {
+    res.redirect("/manifest.json");
+});
 
 if (!process.env.VERCEL) {
-    serveHTTP(addonInterface, { port: 7000 });
+    serveHTTP(builder.getInterface(), { port: 7000 });
     console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
 }
+
+export default app;
