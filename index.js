@@ -51,7 +51,7 @@ const builder = new addonBuilder({
     ]
 });
 
-// 2. Каталог + Перфектна търсачка (Базирана на alt атрибутите и точни филтри)
+// 2. Каталог + Перфектна търсачка
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -81,7 +81,6 @@ builder.defineCatalogHandler(async function (args) {
             const isMovieLink = link.includes("/movies/");
             const isSeriesLink = link.includes("/tvshows/") || link.includes("/drama/");
 
-            // Строго филтриране: Филмите само във филми, сериалите само в сериали
             if (args.type === "movie" && !isMovieLink) return;
             if (args.type === "series" && !isSeriesLink) return;
 
@@ -116,7 +115,7 @@ builder.defineCatalogHandler(async function (args) {
     return { metas };
 });
 
-// 3. МЕТАДАННИ (С точен брой епизоди чрез DOM)
+// 3. МЕТАДАННИ (Увеличен timeout до 20 секунди за Render)
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -148,8 +147,8 @@ builder.defineMetaHandler(async function (args) {
             }
         });
 
-        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 7000 });
-        await page.waitForSelector('.episode-item', { timeout: 3500 }).catch(() => {});
+        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        await page.waitForSelector('.episode-item', { timeout: 10000 }).catch(() => {});
 
         const pageData = await page.evaluate(() => {
             const epCount = document.querySelectorAll('.episode-item').length;
@@ -207,7 +206,7 @@ builder.defineMetaHandler(async function (args) {
     return { meta: metaResult };
 });
 
-// 4. СТРИЙМОВЕ (Свързване с Cinemeta и извличане на директен .mp4)
+// 4. СТРИЙМОВЕ (Увеличен timeout до 25 секунди за Render)
 builder.defineStreamHandler(async function (args) {
     let kisskhId = args.id;
     let episodeNumber = "1";
@@ -237,7 +236,7 @@ builder.defineStreamHandler(async function (args) {
 
                 $("article, .item, .post, .result-item, .data h3 a").each((i, el) => {
                     if (matchedSlug) return;
-                    const aTag = $(el).is("a") ? $(el) :$(el).find("a").first();
+                    const aTag = $(el).is("a") ? $(el) : $(el).find("a").first();
                     const href = aTag.attr("href");
                     
                     if (href && (href.includes("/movies/") || href.includes("/tvshows/") || href.includes("/drama/"))) {
@@ -246,13 +245,13 @@ builder.defineStreamHandler(async function (args) {
                 });
 
                 if (!matchedSlug && year) {
-                    searchUrl = `https://kisskh.org/?s=${encodeURIComponent(`${title}${year}`)}`;
+                    searchUrl = `https://kisskh.org/?s=${encodeURIComponent(`${title} ${year}`)}`;
                     searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 6000 });
                     $ = cheerio.load(searchRes.data);
 
                     $("article, .item, .post, .result-item, .data h3 a").each((i, el) => {
                         if (matchedSlug) return;
-                        const aTag = $(el).is("a") ? $(el) :$(el).find("a").first();
+                        const aTag = $(el).is("a") ? $(el) : $(el).find("a").first();
                         const href = aTag.attr("href");
                         if (href && (href.includes("/movies/") || href.includes("/tvshows/"))) {
                             matchedSlug = href;
@@ -311,13 +310,13 @@ builder.defineStreamHandler(async function (args) {
             }
         });
 
-        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 8000 });
+        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
 
         await page.waitForFunction(() => {
             const video = document.querySelector('video');
             const source = document.querySelector('video source');
             return (video && video.src && video.src.includes('http')) || (source && source.src && source.src.includes('http'));
-        }, { timeout: 6000 }).catch(() => {});
+        }, { timeout: 15000 }).catch(() => {});
 
         if (!directMp4Url) {
             directMp4Url = await page.evaluate(() => {
