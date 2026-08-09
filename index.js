@@ -1,4 +1,4 @@
-const { addonBuilder, getRouter } = require("stremio-addon-sdk");
+const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer");
@@ -29,7 +29,7 @@ async function getBrowserInstance() {
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.perfect",
-    version: "21.0.0",
+    version: "22.0.0",
     name: "KissKH.org Perfect Addon",
     description: "Перфектен Addon с точна търсачка, реални епизоди и Cinemeta интеграция",
     resources: ["catalog", "meta", "stream"],
@@ -353,6 +353,59 @@ builder.defineStreamHandler(async function (args) {
     return { streams };
 });
 
-// Настройка на рутера за Vercel Serverless (Изискване на Stremio SDK)
-const router = getRouter(builder.getInterface());
-module.exports = router;
+// Перфектен Serverless handler за Vercel без грешки с рутера
+const addonInterface = builder.getInterface();
+
+module.exports = async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    
+    // Поддържане на Stremio Manifest и заявки
+    const url = req.url;
+    if (url === '/' || url === '/manifest.json') {
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify(addonInterface.manifest));
+    }
+
+    try {
+        // Ръчно рутиране на ресурсите (catalog, meta, stream)
+        const parts = url.split('/').filter(Boolean);
+        // Пример: /catalog/movie/kisskh_movies.json
+        if (parts.length >= 3) {
+            const resource = parts[0];
+            const type = parts[1];
+            let idOrExtra = parts[2].replace('.json', '');
+            let extra = {};
+
+            if (parts[3]) {
+                // Имаме extra параметри
+                const extraParts = parts[3].replace('.json', '').split('&');
+                extraParts.forEach(p => {
+                    const [k, v] = p.split('=');
+                    if (k && v) extra[k] = decodeURIComponent(v);
+                });
+            }
+
+            let result = null;
+            if (resource === 'catalog') {
+                result = await addonInterface.get('catalog', type, idOrExtra, extra);
+            } else if (resource === 'meta') {
+                result = await addonInterface.get('meta', type, idOrExtra);
+            } else if (resource === 'stream') {
+                result = await addonInterface.get('stream', type, idOrExtra);
+            }
+
+            if (result) {
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify(result));
+            }
+        }
+        
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: "Not found" }));
+    } catch (err) {
+        console.error(err);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message }));
+    }
+};
