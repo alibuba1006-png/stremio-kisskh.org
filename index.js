@@ -14,7 +14,7 @@ const streamCache = new Map();
 
 async function getBrowserInstance() {
     return await puppeteer.launch({
-        args: chromium.args,
+        args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
@@ -25,7 +25,7 @@ async function getBrowserInstance() {
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.perfect",
-    version: "23.0.0",
+    version: "25.0.0",
     name: "KissKH.org Perfect Addon",
     description: "Перфектен Addon с точна търсачка, реални епизоди и Cinemeta интеграция",
     resources: ["catalog", "meta", "stream"],
