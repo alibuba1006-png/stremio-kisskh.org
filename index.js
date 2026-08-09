@@ -6,7 +6,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "6.4.0",
+    version: "6.5.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -254,22 +254,8 @@ builder.defineStreamHandler(async (args) => {
 
 const addonInterface = builder.getInterface();
 
-export default async function handler(req, res) {
-    try {
-        return await new Promise((resolve, reject) => {
-            addonInterface(req, res, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-    } catch (err) {
-        console.error("Vercel Serverless Fatal Error:", err?.message || err);
-        if (!res.headersSent) {
-            res.statusCode = 500;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ error: err?.message || "Internal Server Error" }));
-        }
-    }
+export default function (req, res) {
+    return addonInterface.middleware()(req, res);
 }
 
 if (!process.env.VERCEL) {
