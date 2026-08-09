@@ -1,0 +1,9 @@
+{
+  "id": "org.myaddon.stremio",
+  "version": "1.0.0",
+  "name": "Моят Стрийм Добавка",
+  "description": "Безплатни стриймове от GitHub Pages",
+  "resources": ["stream"],
+  "types": ["movie", "series"],
+  "idPrefixes": ["tt"]
+}
