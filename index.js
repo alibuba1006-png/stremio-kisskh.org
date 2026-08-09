@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "8.4.0",
+    version: "8.5.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -73,7 +73,6 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
         if (searchQuery && searchQuery.trim() !== "") {
             dramas = await searchKisskh(searchQuery, kissType);
         } else {
-            // Директно извличане от Explore API на KissKH (съответства на страницата им с филтри)
             const page = Math.floor(skip / 20) + 1;
             const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&status=0&sub=0&country=0&order=2`;
             
@@ -90,20 +89,19 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
                 dramas = [];
             }
 
-            // Ако сайтът върне празен масив поради защита, ползваме актуални резервни списъци с постери
             if (!dramas || dramas.length === 0) {
                 if (type === "series") {
                     dramas = [
-                        { id: 4567, title: "Crash Landing on You", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" },
-                        { id: 5120, title: "Goblin", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" },
-                        { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" },
-                        { id: 7111, title: "Business Proposal", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODg2ZjY4OGItNDYyNS00YzZhLWFiYjAtYTYyNmQwZWY2N2E1XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" },
-                        { id: 8222, title: "All of Us Are Dead", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODJmMzJiODctNGVkMS00MjQ5LThjNDgtNDljNDcxNjNhZDdmXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" }
+                        { id: 4567, title: "Crash Landing on You", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/u3bZ4JWxTj4aWz9oA2f1b4c9e8d.jpg" },
+                        { id: 5120, title: "Goblin", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/tK1kxLj7fC8aT1P8t8gM9q8b8n.jpg" },
+                        { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://image.tmdb.org/t/p/w500/dvN0zWb2JGICW7L0XmQzXoX3b0j.jpg" },
+                        { id: 7111, title: "Business Proposal", episodesCount: 12, thumbnail: "https://image.tmdb.org/t/p/w500/3G0mOz0nndX6Ik8817s3gE5YV1b.jpg" },
+                        { id: 8222, title: "All of Us Are Dead", episodesCount: 12, thumbnail: "https://image.tmdb.org/t/p/w500/pZn2iXq7S1jZ4uXgQ0zXp4n3Xj3.jpg" }
                     ];
                 } else {
                     dramas = [
-                        { id: 9101, title: "20th Century Girl", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BYzJkYTA3MDUtYjMxNS00MGNmLThlMjMtYmE4MjY4MzZhZTliXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" },
-                        { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNjc0ZjdhOTktZjE1NC00OWM0LWE5NjItNmUwOTQ1NWM4YmNhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg" }
+                        { id: 9101, title: "20th Century Girl", episodesCount: 1, thumbnail: "https://image.tmdb.org/t/p/w500/jZkYpW3z9zZz8z9zZz8z9zZz8z9.jpg" },
+                        { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://image.tmdb.org/t/p/w500/kZkYpW3z9zZz8z9zZz8z9zZz8z9.jpg" }
                     ];
                 }
             }
@@ -315,7 +313,7 @@ app.get("/meta/:type/:id(*).json", async (req, res) => {
         const resp = await addonInterface.get("meta", type, cleanId);
         res.json(resp);
     } catch (e) {
-        res.json({ meta: null});
+        res.json({ meta: null });
     }
 });
 
