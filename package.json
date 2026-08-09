@@ -1,6 +1,6 @@
 {
   "name": "stremio-kisskh",
-  "version": "23.0.0",
+  "version": "24.0.0",
   "description": "KissKH Stremio Addon on Vercel",
   "main": "index.js",
   "dependencies": {
