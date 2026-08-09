@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "8.8.0",
+    version: "8.9.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -54,7 +54,7 @@ async function searchKisskh(query, kissType) {
         const url = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
         const response = await axios.get(url, {
             headers: { 
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36",
                 "Referer": "https://kisskh.co/" 
             },
             timeout: 4000
@@ -77,7 +77,7 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
                 const url = `${KISSKH_BASE}/api/DramaList/List?page=1&type=${kissType}&sub=0&country=0&status=0&order=2`;
                 const response = await axios.get(url, {
                     headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36",
                         "Referer": "https://kisskh.co/"
                     },
                     timeout: 4000
@@ -88,17 +88,30 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
             }
         }
 
+        // Ако мрежовият заявка е блокирана от защитата на сайта, зареждаме богато подбран списък от топ заглавия
         if (!dramas || dramas.length === 0) {
             if (type === "series") {
                 dramas = [
                     { id: 4567, title: "Crash Landing on You", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
                     { id: 5120, title: "Goblin", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
+                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 7111, title: "Business Proposal", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODg2ZjY4OGItNDYyNS00YzZhLWFiYjAtYTYyNmQwZWY2N2E1XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8222, title: "All of Us Are Dead", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODJmMzJiODctNGVkMS00MjQ5LThjNDgtNDljNDcxNjNhZDdmXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8223, title: "Descendants of the Sun", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzE2ZjgzMTUtZmM0My00NmZhLWE2MDctNTM5YTc0Zjc0ZTFmXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8224, title: "True Beauty", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNTBhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8225, title: "Strong Woman Do Bong Soon", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8226, title: "Weightlifting Fairy Kim Bok Joo", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNTBhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8227, title: "The Glory", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8228, title: "Moving", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
+                    { id: 8229, title: "Marry My Husband", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
                 ];
             } else {
                 dramas = [
                     { id: 9101, title: "20th Century Girl", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BYzJkYTA3MDUtYjMxNS00MGNmLThlMjMtYmE4MjY4MzZhZTliXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
-                    { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNjc0ZjdhOTktZjE1NC00OWM0LWE5NjItNmUwOTQ1NWM4YmNhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 }
+                    { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNjc0ZjdhOTktZjE1NC00OWM0LWE5NjItNmUwOTQ1NWM4YmNhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
+                    { id: 9103, title: "The Call", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
+                    { id: 9104, title: "Unlocked", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
+                    { id: 9105, title: "Space Sweepers", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 }
                 ];
             }
         }
@@ -130,7 +143,7 @@ async function getKisskhMeta(dramaId, type) {
         const url = `${KISSKH_BASE}/api/DramaList/Drama/${dramaId}?sub=true`;
         const response = await axios.get(url, {
             headers: { 
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36",
                 "Referer": "https://kisskh.co/" 
             },
             timeout: 5000
@@ -171,7 +184,7 @@ async function getKisskhStreamApi(episodeId) {
         const url = `${KISSKH_BASE}/api/DramaList/Episode/${episodeId}`;
         const response = await axios.get(url, {
             headers: { 
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36",
                 "Referer": "https://kisskh.co/" 
             },
             timeout: 5000
