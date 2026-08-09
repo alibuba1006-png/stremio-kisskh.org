@@ -1,12 +1,13 @@
 import pkg from "stremio-addon-sdk";
-const { addonBuilder, serveHTTP } = pkg;
+const { addonBuilder } = pkg;
+import express from "express";
 import axios from "axios";
 
 const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "6.7.0",
+    version: "7.1.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -230,39 +231,64 @@ builder.defineStreamHandler(async (args) => {
 });
 
 const addonInterface = builder.getInterface();
+const app = express();
 
-// Перфектен рутер за Vercel без middleware грешки
-export default async function (req, res) {
+app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
-    
-    if (req.method === "OPTIONS") {
-        res.writeHead(200);
-        res.end();
-        return;
-    }
+    if (req.method === "OPTIONS") return res.sendStatus(200);
+    next();
+});
 
-    if (req.url === "/manifest.json" || req.url === "/") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(manifest));
-        return;
-    }
+app.get("/manifest.json", (req, res) => {
+    res.json(addonInterface.manifest);
+});
 
-    addonInterface.handleRequest(req, res, function (err, reply) {
-        if (err) {
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: err.message }));
-        } else if (reply) {
-            res.writeHead(reply.status || 200, reply.headers);
-            res.end(reply.body);
-        } else {
-            res.writeHead(404, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Not found" }));
+app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        let extra = {};
+        if (req.params.extra) {
+            req.params.extra.split("&").forEach(part => {
+                const [key, val] = part.split("=");
+                if (key && val) extra[key] = decodeURIComponent(val);
+            });
         }
+        const resp = await addonInterface.get("catalog", type, id, extra);
+        res.json(resp);
+    } catch (e) {
+        res.json({ metas: [] });
+    }
+});
+
+app.get("/meta/:type/:id.json", async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        const resp = await addonInterface.get("meta", type, id);
+        res.json(resp);
+    } catch (e) {
+        res.json({ meta: null });
+    }
+});
+
+app.get("/stream/:type/:id.json", async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        const resp = await addonInterface.get("stream", type, id);
+        res.json(resp);
+    } catch (e) {
+        res.json({ streams: [] });
+    }
+});
+
+app.get("/", (req, res) => {
+    res.redirect("/manifest.json");
+});
+
+if (!process.env.VERCEL) {
+    app.listen(7000, () => {
+        console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
     });
 }
 
-if (!process.env.VERCEL) {
-    serveHTTP(addonInterface, { port: 7000 });
-    console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
-}
+export default app;
