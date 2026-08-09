@@ -1,12 +1,13 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const express = require("express");
-const axios = require("axios");
+import pkg from "stremio-addon-sdk";
+const { addonBuilder, serveHTTP } = pkg;
+import express from "express";
+import axios from "axios";
 
 const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "8.1.0",
+    version: "8.2.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -72,7 +73,6 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
         if (searchQuery && searchQuery.trim() !== "") {
             dramas = await searchKisskh(searchQuery, kissType);
         } else {
-            // Резервен механизъм за каталога, за да не връща празен отговор (EmptyContent)
             const fallbackQueries = ["Love", "My", "The", "Romance", "Life", "School", "Secret", "A", "I"];
             const randomQuery = fallbackQueries[Math.floor(Math.random() * fallbackQueries.length)];
             dramas = await searchKisskh(randomQuery, kissType);
@@ -315,9 +315,9 @@ app.get("/", (req, res) => {
     res.redirect("/manifest.json");
 });
 
-if (process.env.VERCEL) {
-    module.exports = app;
-} else {
+if (!process.env.VERCEL) {
     serveHTTP(addonInterface, { port: 7000 });
     console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
 }
+
+export default app;
