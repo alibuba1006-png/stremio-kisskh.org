@@ -6,9 +6,9 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "5.0.0",
+    version: "6.0.0",
     name: "KissKH Addon",
-    description: "Гледай Азиатски сериали и филми от KissKH в Stremio (с поддръжка за OpenSubtitles)",
+    description: "Гледай Азиатски сериали и филми от KissKH в Stremio (Бърза версия без браузър)",
     resources: ["catalog", "meta", "stream"],
     types: ["series", "movie"],
     idPrefixes: ["kisskh:", "tt"],
@@ -36,28 +36,6 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// --- BROWSER (Vercel & Local) ---
-async function getBrowser() {
-    if (process.env.VERCEL) {
-        const puppeteerCore = (await import("puppeteer-core")).default;
-        const chromium = (await import("@sparticuz/chromium")).default;
-        return await puppeteerCore.launch({
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-            ignoreHTTPSErrors: true,
-        });
-    } else {
-        const puppeteer = (await import("puppeteer")).default;
-        return await puppeteer.launch({
-            headless: "new",
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-            channel: "chrome" // Опитва се да намери инсталиран Google Chrome на твоя компютър автоматично
-        });
-    }
-}
-
 // --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
     try {
@@ -72,7 +50,7 @@ async function findIMDbId(title, type) {
     return null;
 }
 
-// --- ХЕЛПЪРИ ТЪРСЕНЕ И КАТАЛОГ ---
+// --- ТЪРСЕНЕ И КАТАЛОГ ---
 async function searchKisskh(query, kissType) {
     try {
         const url = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
@@ -181,55 +159,25 @@ async function getKisskhMeta(dramaId, type) {
     }
 }
 
-// --- ПРЕХВАЩАНЕ НА СТРИЙМ ---
-async function getKisskhStreamWithPuppeteer(dramaId, episodeId, epNumber) {
-    let browser = null;
-    let page = null;
-    let streamUrl = null;
-    let attempts = 0;
-
+// --- ДИРЕКТНО ВЗИМАНЕ НА СТРИЙМ (БЕЗ ПУПЕТИЙР) ---
+async function getKisskhStream(episodeId) {
     try {
-        browser = await getBrowser();
-        page = await browser.newPage();
-
-        await page.setRequestInterception(true);
-
-        page.on("request", req => {
-            const url = req.url();
-            const resourceType = req.resourceType();
-
-            if (url.includes(".m3u8") && !streamUrl) {
-                streamUrl = url;
-                req.continue();
-            } else if (["image", "stylesheet", "font", "media"].includes(resourceType)) {
-                req.abort();
-            } else {
-                req.continue();
-            }
+        const url = `${KISSKH_BASE}/api/DramaList/Episode/${episodeId}`;
+        const response = await axios.get(url, {
+            headers: { "Referer": "https://kisskh.co/" },
+            timeout: 10000
         });
-
-        const targetUrl = `${KISSKH_BASE}/Drama/Movie/Episode-${epNumber}?id=${dramaId}&ep=${episodeId}`;
-        page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 }).catch(() => {});
-
-        while (!streamUrl && attempts < 25) {
-            await new Promise(r => setTimeout(r, 150));
-            attempts++;
+        
+        const videoUrl = response.data?.video || response.data?.link || response.data?.source;
+        if (videoUrl) {
+            return [{
+                title: "KissKH HD Stream",
+                url: videoUrl
+            }];
         }
-
     } catch (err) {
-        console.error("Puppeteer Error:", err.message);
-    } finally {
-        if (page) await page.close().catch(() => {});
-        if (browser) await browser.close().catch(() => {});
+        console.error("Stream Fetch Error:", err.message);
     }
-
-    if (streamUrl) {
-        return [{
-            title: "KissKH HD Stream",
-            url: streamUrl
-        }];
-    }
-
     return [];
 }
 
@@ -249,7 +197,7 @@ builder.defineMetaHandler(async (args) => {
 });
 
 builder.defineStreamHandler(async (args) => {
-    let dramaId, episodeId, epNumber = "1";
+    let episodeId = null;
 
     if (args.id.startsWith("tt")) {
         const idParts = args.id.split(":");
@@ -264,26 +212,23 @@ builder.defineStreamHandler(async (args) => {
             const searchResults = await searchKisskh(title, kissType);
 
             if (searchResults.length > 0) {
-                dramaId = searchResults[0].id;
+                const dramaId = searchResults[0].id;
                 const meta = await getKisskhMeta(dramaId, args.type);
                 if (meta && meta.videos && meta.videos.length > 0) {
                     const targetEp = meta.videos.find(v => v.number === parseInt(requestedEpisode)) || meta.videos[0];
                     const epParts = targetEp.id.split(":");
                     episodeId = epParts[2];
-                    epNumber = targetEp.number.toString();
                 }
             }
         }
     } else if (args.id.startsWith("kisskh:")) {
         const parts = args.id.split(":");
-        dramaId = parts[1];
         episodeId = parts[2];
-        epNumber = parts[3] || "1";
     }
 
-    if (!dramaId || !episodeId) return { streams: [] };
+    if (!episodeId) return { streams: [] };
 
-    const streams = await getKisskhStreamWithPuppeteer(dramaId, episodeId, epNumber);
+    const streams = await getKisskhStream(episodeId);
     return { streams };
 });
 
@@ -295,5 +240,5 @@ export default (req, res) => {
 
 if (!process.env.VERCEL) {
     serveHTTP(addonInterface, { port: 7000 });
-    console.log("🚀 Сървърът с IMDb метаданни за субтитри работи на: http://127.0.0.1:7000/manifest.json");
+    console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
 }
