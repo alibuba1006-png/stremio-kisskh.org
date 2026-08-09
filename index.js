@@ -292,62 +292,14 @@ builder.defineStreamHandler(async (args) => {
     return { streams };
 });
 
+// --- VERCEL / LOCAL EXPORT ---
 const addonInterface = builder.getInterface();
 
-// Vercel / Local (Експрес интеграция за ES модули)
-import express from "express";
-const app = express();
-
-app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "*");
-    if (req.method === "OPTIONS") return res.sendStatus(200);
-    next();
-});
-
-app.get("/manifest.json", (req, res) => {
-    res.json(addonInterface.manifest);
-});
-
-app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
-    const { type, id } = req.params;
-    let skip = 0;
-    let search = null;
-    let extraStr = req.params.extra || "";
-    extraStr = extraStr.replace(/\.json$/, "");
-
-    if (extraStr) {
-        extraStr.split("&").forEach(part => {
-            const [key, val] = part.split("=");
-            if (key === "skip") skip = parseInt(val) || 0;
-            if (key === "search") search = decodeURIComponent(val);
-        });
-    }
-    const metas = await getKisskhCatalog(type, skip, search);
-    res.json({ metas });
-});
-
-app.get("/meta/:type/:id(*).json", async (req, res) => {
-    const { type, id } = req.params;
-    const cleanId = id.replace(/\.json$/, "");
-    const resp = await addonInterface.get("meta", type, cleanId);
-    res.json(resp);
-});
-
-app.get("/stream/:type/:id(*).json", async (req, res) => {
-    const { type, id } = req.params;
-    const cleanId = id.replace(/\.json$/, "");
-    const resp = await addonInterface.get("stream", type, cleanId);
-    res.json(resp);
-});
-
-app.get("/", (req, res) => {
-    res.redirect("/manifest.json");
-});
+export default function (req, res) {
+    addonInterface.get(req, res);
+}
 
 if (!process.env.VERCEL) {
     serveHTTP(addonInterface, { port: 7000 });
     console.log("🚀 Сървърът работи на: http://127.0.0.1:7000/manifest.json");
 }
-
-export default app;
