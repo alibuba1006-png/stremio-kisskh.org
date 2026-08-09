@@ -13,9 +13,9 @@ const streamCache = new Map();
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.fast",
-    version: "30.0.0",
+    version: "31.0.0",
     name: "KissKH.org Fast Addon",
-    description: "Бърз Stremio аддон за KissKH без браузър и с Cinemeta интеграция",
+    description: "Бърз Stremio аддон за KissKH без външни препратки",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["kisskh_", "tt"],
@@ -35,7 +35,7 @@ const builder = new addonBuilder({
     ]
 });
 
-// 2. Каталог + Търсачка (Супер бърза)
+// 2. Каталог + Търсачка
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -98,7 +98,7 @@ builder.defineCatalogHandler(async function (args) {
     return { metas };
 });
 
-// 3. МЕТАДАННИ (Без чакане на браузър)
+// 3. МЕТАДАННИ
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -109,7 +109,7 @@ builder.defineMetaHandler(async function (args) {
     const slug = Buffer.from(args.id.replace("kisskh_", ""), "base64").toString("utf-8");
     const fullUrl = `https://kisskh.org${slug}`;
 
-    let totalEpisodes = 12; // Стандартен брой епизоди по подразбиране
+    let totalEpisodes = 12;
     let pageTitle = "KissKH Content";
     let description = "Гледай в KissKH";
     let poster = "";
@@ -157,84 +157,26 @@ builder.defineMetaHandler(async function (args) {
     return { meta: metaResult };
 });
 
-// 4. СТРИЙМОВЕ
+// 4. СТРИЙМОВЕ (Без опасни препратки)
 builder.defineStreamHandler(async function (args) {
-    let kisskhId = args.id;
     let episodeNumber = "1";
-
-    // Поддръжка на Cinemeta (IMDb ID)
-    if (args.id.startsWith("tt")) {
+    if (args.id.includes(":")) {
         const parts = args.id.split(":");
-        const imdbId = parts[0];
-        const requestedEp = parts[2] || "1";
-        episodeNumber = requestedEp;
-
-        try {
-            const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`);
-            const meta = cinemetaRes.data?.meta;
-            const title = meta?.name;
-
-            if (title) {
-                const searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
-                const searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 5000 });
-                const $ = cheerio.load(searchRes.data);
-
-                let matchedSlug = null;
-                $("article").each((i, el) => {
-                    if (matchedSlug) return;
-                    const href = $(el).find("a").attr("href");
-                    if (href) {
-                        const isMovie = href.includes("/movies/");
-                        const isSeries = href.includes("/tvshows/") || href.includes("/drama/");
-                        if (args.type === "movie" && isMovie) matchedSlug = href;
-                        if (args.type === "series" && isSeries) matchedSlug = href;
-                    }
-                });
-
-                if (matchedSlug) {
-                    const cleanSlug = matchedSlug.replace("https://kisskh.org", "").replace(/\/$/, "");
-                    kisskhId = `kisskh_${Buffer.from(cleanSlug).toString("base64")}:1:${requestedEp}`;
-                }
-            }
-        } catch (e) {
-            console.error(`[IMDb Error]:`, e.message);
-        }
+        episodeNumber = parts[2] || "1";
     }
 
-    if (!kisskhId.startsWith("kisskh_")) {
-        return { streams: [] };
-    }
-
-    if (streamCache.has(kisskhId)) {
-        return { streams: streamCache.get(kisskhId) };
-    }
-
-    const idParts = kisskhId.split(":");
-    const mainId = idParts[0];
-    episodeNumber = idParts[2] || episodeNumber;
-
-    const slug = Buffer.from(mainId.replace("kisskh_", ""), "base64").toString("utf-8");
-    
-    // Тъй като нямаме браузър, връщаме линк към страницата, където потребителят може да гледа директно, 
-    // или опитваме да извлечем уеб плейъра ако е достъпен.
-    const watchUrl = `https://kisskh.org${slug}/?episode=${episodeNumber.padStart(2, '0')}`;
-
+    // Връщаме информационен стриъм, който няма да отваря външни браузъри и предупреждения
     let streams = [{
-        name: "KissKH Web",
-        title: `Гледай Епизод ${episodeNumber} (Отвори в Браузър/Плейър)`,
-        url: watchUrl,
-        behaviorHints: {
-            notSupportedInBrowser: false
-        }
+        name: "KissKH Info",
+        title: `Епизод ${episodeNumber} - Използвай търсачката в сайта за гледане`,
+        url: "https://v3-cinemeta.strem.io/static/empty.mp4"
     }];
 
-    streamCache.set(kisskhId, streams);
     return { streams };
 });
 
 const addonInterface = builder.getInterface();
 
-// Съвместимост за Vercel или стандартен сървър
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
