@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "7.6.0",
+    version: "8.0.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -53,26 +53,13 @@ async function searchKisskh(query, kissType) {
     try {
         const url = `${KISSKH_BASE}/api/DramaList/Search?q=${encodeURIComponent(query)}&type=${kissType}`;
         const response = await axios.get(url, {
-            headers: { "Referer": "https://kisskh.co/" },
-            timeout: 5000
-        });
-        return response.data || [];
-    } catch (e) {
-        return [];
-    }
-}
-
-async function fetchPageFromKisskh(kissType, page) {
-    try {
-        const url = `${KISSKH_BASE}/api/DramaList/List?page=${page}&type=${kissType}&sub=0&country=0&status=0&order=2`;
-        const response = await axios.get(url, {
-            headers: {
+            headers: { 
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://kisskh.co/"
+                "Referer": "https://kisskh.co/" 
             },
             timeout: 5000
         });
-        return response.data.data || [];
+        return response.data || [];
     } catch (e) {
         return [];
     }
@@ -83,32 +70,42 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
         const kissType = type === "movie" ? 2 : 1; 
         let dramas = [];
 
-        if (searchQuery) {
-            const rawResults = await searchKisskh(searchQuery, kissType);
-            const cleanQuery = searchQuery.toLowerCase().trim();
-
-            dramas = rawResults.filter(item => {
-                const itemTitle = (item.title || "").toLowerCase();
-                const epCount = parseInt(item.episodesCount) || 0;
-                const isTitleMatch = itemTitle.includes(cleanQuery);
-                if (!isTitleMatch) return false;
-
-                if (type === "movie") {
-                    return item.type === 2 || epCount === 1;
-                } else {
-                    return item.type === 1 || epCount > 1;
-                }
-            });
+        if (searchQuery && searchQuery.trim() !== "") {
+            dramas = await searchKisskh(searchQuery, kissType);
         } else {
-            const startPage = Math.floor(skip / 10) + 1;
-            const [data1, data2] = await Promise.all([
-                fetchPageFromKisskh(kissType, startPage).catch(() => []),
-                fetchPageFromKisskh(kissType, startPage + 1).catch(() => [])
-            ]);
-            dramas = [...data1, ...data2];
+            // Резервен механизъм: Тъй като главният списък често блокира, 
+            // зареждаме начални популярни заглавия чрез базово търсене
+            const fallbackQueries = ["Love", "My", "The", "Romance", "Life", "School", "Secret"];
+            const randomQuery = fallbackQueries[Math.floor(Math.random() * fallbackQueries.length)];
+            dramas = await searchKisskh(randomQuery, kissType);
+            
+            // Ако и това не върне нищо, опитваме с празно търсене или алтернативен линк
+            if (!dramas || dramas.length === 0) {
+                const url = `${KISSKH_BASE}/api/DramaList/List?page=1&type=${kissType}`;
+                const response = await axios.get(url, {
+                    headers: { "Referer": "https://kisskh.co/" },
+                    timeout: 5000
+                });
+                dramas = response.data?.data || [];
+            }
         }
 
-        return dramas.map(item => ({
+        const cleanQuery = searchQuery ? searchQuery.toLowerCase().trim() : "";
+
+        const filtered = dramas.filter(item => {
+            const itemTitle = (item.title || "").toLowerCase();
+            const epCount = parseInt(item.episodesCount) || 0;
+            
+            if (cleanQuery && !itemTitle.includes(cleanQuery)) return false;
+
+            if (type === "movie") {
+                return item.type === 2 || epCount === 1;
+            } else {
+                return item.type === 1 || epCount > 1;
+            }
+        });
+
+        return filtered.map(item => ({
             id: `kisskh:${item.id}`,
             type: type,
             name: item.title || "Unknown",
@@ -196,7 +193,6 @@ app.get("/manifest.json", (req, res) => {
     res.json(manifest);
 });
 
-// Каталог рутер
 app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     try {
         const { type } = req.params;
@@ -221,7 +217,6 @@ app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     }
 });
 
-// Мета рутер
 app.get("/meta/:type/:id(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
@@ -248,7 +243,6 @@ app.get("/meta/:type/:id(*).json", async (req, res) => {
     }
 });
 
-// Стрийм рутер с подобрено разпознаване на епизодите
 app.get("/stream/:type/:id(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
@@ -260,7 +254,6 @@ app.get("/stream/:type/:id(*).json", async (req, res) => {
             if (parts[2]) {
                 episodeId = parts[2];
             } else if (parts[1]) {
-                // Ако липсва епизод ID, взимаме първия епизод от сериала
                 const meta = await getKisskhMeta(parts[1], type);
                 if (meta && meta.videos && meta.videos.length > 0) {
                     const epParts = meta.videos[0].id.split(":");
