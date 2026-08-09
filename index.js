@@ -6,7 +6,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "6.2.0",
+    version: "6.3.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -187,7 +187,7 @@ async function getKisskhStream(episodeId) {
     return [];
 }
 
-const addonInterface = builder.getInterface();
+// --- ДЕФИНИРАНЕ НА ХЕНДЛЪРИТЕ КЪМ SDK-ТО ---
 
 builder.defineCatalogHandler(async (args) => {
     try {
@@ -254,14 +254,10 @@ builder.defineStreamHandler(async (args) => {
     }
 });
 
-export default async function (req, res) {
-    try {
-        return await addonInterface(req, res);
-    } catch (err) {
-        console.error("Vercel Request Handler Error:", err.message, err.stack);
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: err.message }));
-    }
+const addonInterface = builder.getInterface();
+
+export default function (req, res) {
+    addonInterface.get(req, res);
 }
 
 if (!process.env.VERCEL) {
