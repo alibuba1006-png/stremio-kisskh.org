@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "7.3.0",
+    version: "7.4.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -193,15 +193,18 @@ app.get("/manifest.json", (req, res) => {
     res.json(manifest);
 });
 
-// Каталог рутер
-app.get("/catalog/:type/:id/:extra(*).json", async (req, res) => {
+// Универсален каталог рутер, който поддържа заявки както с параметри, така и без тях
+app.get("/catalog/:type/:id/:extra(*)?", async (req, res) => {
     try {
         const { type } = req.params;
         let skip = 0;
         let search = null;
 
-        if (req.params.extra) {
-            req.params.extra.split("&").forEach(part => {
+        let extraStr = req.params.extra || "";
+        extraStr = extraStr.replace(/\.json$/, "");
+
+        if (extraStr) {
+            extraStr.split("&").forEach(part => {
                 const [key, val] = part.split("=");
                 if (key === "skip" && val) skip = parseInt(val) || 0;
                 if (key === "search" && val) search = decodeURIComponent(val);
