@@ -1,4 +1,4 @@
-const { addonBuilder } = require("stremio-addon-sdk");
+const { addonBuilder, getRouter } = require("stremio-addon-sdk");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const puppeteer = require("puppeteer");
@@ -29,7 +29,7 @@ async function getBrowserInstance() {
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.perfect",
-    version: "20.0.0",
+    version: "21.0.0",
     name: "KissKH.org Perfect Addon",
     description: "Перфектен Addon с точна търсачка, реални епизоди и Cinemeta интеграция",
     resources: ["catalog", "meta", "stream"],
@@ -51,7 +51,7 @@ const builder = new addonBuilder({
     ]
 });
 
-// 2. Каталог + Перфектна търсачка
+// 2. Каталог + Търсачка
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -353,5 +353,6 @@ builder.defineStreamHandler(async function (args) {
     return { streams };
 });
 
-// Експортиране за Vercel Serverless
-module.exports = builder.getInterface();
+// Настройка на рутера за Vercel Serverless (Изискване на Stremio SDK)
+const router = getRouter(builder.getInterface());
+module.exports = router;
