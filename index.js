@@ -1,7 +1,8 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const cheerio = require("cheerio");
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
 
 const HTTP_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -10,26 +11,21 @@ const HTTP_HEADERS = {
 
 const metaCache = new Map();
 const streamCache = new Map();
-let globalBrowser = null;
 
 async function getBrowserInstance() {
-    if (!globalBrowser || !globalBrowser.connected) {
-        globalBrowser = await puppeteer.launch({ 
-            headless: "new",
-            args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox',
-                '--autoplay-policy=no-user-gesture-required'
-            ] 
-        });
-    }
-    return globalBrowser;
+    return await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+    });
 }
 
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.perfect",
-    version: "22.0.0",
+    version: "23.0.0",
     name: "KissKH.org Perfect Addon",
     description: "Перфектен Addon с точна търсачка, реални епизоди и Cinemeta интеграция",
     resources: ["catalog", "meta", "stream"],
@@ -129,10 +125,11 @@ builder.defineMetaHandler(async function (args) {
     let pageTitle = "KissKH Content";
     let description = "Няма описание.";
     let poster = "";
+    let browser = null;
     let page = null;
 
     try {
-        const browser = await getBrowserInstance();
+        browser = await getBrowserInstance();
         page = await browser.newPage();
 
         await page.setRequestInterception(true);
@@ -163,12 +160,9 @@ builder.defineMetaHandler(async function (args) {
 
     } catch (e) {
         console.error(`[ERROR Meta]:`, e.message);
-        if (globalBrowser) {
-            await globalBrowser.close().catch(() => {});
-            globalBrowser = null;
-        }
     } finally {
         if (page) await page.close().catch(() => {});
+        if (browser) await browser.close().catch(() => {});
     }
 
     if (totalEpisodes === 0 && args.type === "series") {
@@ -286,10 +280,11 @@ builder.defineStreamHandler(async function (args) {
     const episodeUrl = `https://kisskh.org${slug}/?episode=${formattedEp}`;
 
     let directMp4Url = null;
+    let browser = null;
     let page = null;
 
     try {
-        const browser = await getBrowserInstance();
+        browser = await getBrowserInstance();
         page = await browser.newPage();
 
         await page.setRequestInterception(true);
@@ -325,6 +320,7 @@ builder.defineStreamHandler(async function (args) {
         console.error(`[STREAM Error]:`, e.message);
     } finally {
         if (page) await page.close().catch(() => {});
+        if (browser) await browser.close().catch(() => {});
     }
 
     let streams = [];
@@ -353,14 +349,12 @@ builder.defineStreamHandler(async function (args) {
     return { streams };
 });
 
-// Перфектен Serverless handler за Vercel без грешки с рутера
 const addonInterface = builder.getInterface();
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
     
-    // Поддържане на Stremio Manifest и заявки
     const url = req.url;
     if (url === '/' || url === '/manifest.json') {
         res.setHeader('Content-Type', 'application/json');
@@ -368,9 +362,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-        // Ръчно рутиране на ресурсите (catalog, meta, stream)
         const parts = url.split('/').filter(Boolean);
-        // Пример: /catalog/movie/kisskh_movies.json
         if (parts.length >= 3) {
             const resource = parts[0];
             const type = parts[1];
@@ -378,7 +370,6 @@ module.exports = async (req, res) => {
             let extra = {};
 
             if (parts[3]) {
-                // Имаме extra параметри
                 const extraParts = parts[3].replace('.json', '').split('&');
                 extraParts.forEach(p => {
                     const [k, v] = p.split('=');
