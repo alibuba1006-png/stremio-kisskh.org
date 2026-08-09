@@ -1,7 +1,12 @@
-"dependencies": {
-  "axios": "^1.6.0",
-  "cheerio": "^1.0.0-rc.12",
-  "puppeteer-core": "^21.0.0",
-  "chrome-aws-lambda": "^10.1.0",
-  "stremio-addon-sdk": "^1.0.0"
+{
+  "name": "stremio-kisskh",
+  "version": "1.0.0",
+  "description": "KissKH Stremio Addon",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0",
+    "puppeteer": "^21.0.0",
+    "stremio-addon-sdk": "^1.0.0"
+  }
 }
