@@ -7,7 +7,7 @@ const KISSKH_BASE = "https://kisskh.co";
 
 const manifest = {
     id: "org.kisskh.stremio",
-    version: "7.1.0",
+    version: "7.2.0",
     name: "KissKH Addon",
     description: "Гледай Азиатски сериали и филми от KissKH в Stremio",
     resources: ["catalog", "meta", "stream"],
@@ -188,9 +188,24 @@ builder.defineCatalogHandler(async (args) => {
 });
 
 builder.defineMetaHandler(async (args) => {
-    if (!args.id || !args.id.startsWith("kisskh:")) return { meta: null };
-    const dramaId = args.id.replace("kisskh:", "");
-    const meta = await getKisskhMeta(dramaId, args.type);
+    let cleanId = args.id;
+    if (cleanId.startsWith("tt")) {
+        try {
+            const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${cleanId}.json`).catch(() => null);
+            const title = res && res.data && res.data.meta ? res.data.meta.name : null;
+            if (title) {
+                const kissType = args.type === "movie" ? 2 : 1;
+                const searchResults = await searchKisskh(title, kissType);
+                if (searchResults.length > 0) {
+                    cleanId = searchResults[0].id.toString();
+                }
+            }
+        } catch (e) {}
+    } else {
+        cleanId = cleanId.replace("kisskh:", "");
+    }
+
+    const meta = await getKisskhMeta(cleanId, args.type);
     return { meta };
 });
 
@@ -244,7 +259,8 @@ app.get("/manifest.json", (req, res) => {
     res.json(addonInterface.manifest);
 });
 
-app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
+// Универсални рутери с поддръжка на точки в ID-тата (за филми с точки в имената/IMDb)
+app.get("/catalog/:type/:id/:extra(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
         let extra = {};
@@ -261,20 +277,22 @@ app.get("/catalog/:type/:id/:extra?.json", async (req, res) => {
     }
 });
 
-app.get("/meta/:type/:id.json", async (req, res) => {
+app.get("/meta/:type/:id(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
-        const resp = await addonInterface.get("meta", type, id);
+        const cleanId = id.replace(/\.json$/, "");
+        const resp = await addonInterface.get("meta", type, cleanId);
         res.json(resp);
     } catch (e) {
         res.json({ meta: null });
     }
 });
 
-app.get("/stream/:type/:id.json", async (req, res) => {
+app.get("/stream/:type/:id(*).json", async (req, res) => {
     try {
         const { type, id } = req.params;
-        const resp = await addonInterface.get("stream", type, id);
+        const cleanId = id.replace(/\.json$/, "");
+        const resp = await addonInterface.get("stream", type, cleanId);
         res.json(resp);
     } catch (e) {
         res.json({ streams: [] });
