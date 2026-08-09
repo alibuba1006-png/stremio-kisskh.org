@@ -1,13 +1,13 @@
 {
   "name": "stremio-kisskh",
-  "version": "24.0.0",
+  "version": "25.0.0",
   "description": "KissKH Stremio Addon on Vercel",
   "main": "index.js",
   "dependencies": {
-    "@sparticuz/chromium": "^121.0.0",
+    "@sparticuz/chromium": "^131.0.0",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0",
-    "puppeteer-core": "^21.0.0",
+    "puppeteer-core": "^24.0.0",
     "stremio-addon-sdk": "^1.0.0"
   }
 }
