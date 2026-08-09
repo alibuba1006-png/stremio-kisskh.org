@@ -1,5 +1,6 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
-const axios = require("axios");
+import pkg from "stremio-addon-sdk";
+const { addonBuilder, serveHTTP } = pkg;
+import axios from "axios";
 
 const KISSKH_BASE = "https://kisskh.co";
 
@@ -38,8 +39,8 @@ const builder = new addonBuilder(manifest);
 // --- BROWSER (Vercel & Local) ---
 async function getBrowser() {
     if (process.env.VERCEL) {
-        const puppeteerCore = require("puppeteer-core");
-        const chromium = require("@sparticuz/chromium");
+        const puppeteerCore = (await import("puppeteer-core")).default;
+        const chromium = (await import("@sparticuz/chromium")).default;
         return await puppeteerCore.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
@@ -48,23 +49,24 @@ async function getBrowser() {
             ignoreHTTPSErrors: true,
         });
     } else {
-        const puppeteer = require("puppeteer");
+        const puppeteer = (await import("puppeteer")).default;
         return await puppeteer.launch({
             headless: "new",
-            args: ["--no-sandbox", "--disable-setuid-sandbox"]
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+            channel: "chrome" // Опитва се да намери инсталиран Google Chrome на твоя компютър автоматично
         });
     }
 }
 
-// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID (За да работят субтитрените добавки!) ---
+// --- ХЕЛПЪР ЗА НАМИРАНЕ НА IMDb ID ---
 async function findIMDbId(title, type) {
     try {
         const endpoint = type === "movie" ? "movie" : "series";
-        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim(); // Премахва годината от заглавието за по-добро търсене
+        const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim(); 
         const res = await axios.get(`https://v3-cinemeta.strem.io/catalog/${endpoint}/top/search=${encodeURIComponent(cleanTitle)}.json`);
         
         if (res && res.data && res.data.metas && res.data.metas.length > 0) {
-            return res.data.metas[0].id; // Връща tt...
+            return res.data.metas[0].id; 
         }
     } catch (e) {}
     return null;
@@ -151,7 +153,6 @@ async function getKisskhMeta(dramaId, type) {
         let rawEpisodes = drama.episodes || [];
         rawEpisodes.sort((a, b) => (parseInt(a.number) || 0) - (parseInt(b.number) || 0));
 
-        // Автоматично намираме IMDb ID за заглавието!
         const imdbId = await findIMDbId(drama.title, type);
 
         const episodes = rawEpisodes.map(ep => ({
@@ -170,7 +171,6 @@ async function getKisskhMeta(dramaId, type) {
             videos: episodes
         };
 
-        // Закачаме IMDb ID-то към метаданните (ако е намерено)!
         if (imdbId) {
             metaObj.imdb_id = imdbId;
         }
@@ -256,7 +256,6 @@ builder.defineStreamHandler(async (args) => {
         const imdbId = idParts[0];
         const requestedEpisode = idParts[2] || "1";
 
-        // Заявка от Cinemeta
         const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`).catch(() => null);
         const title = res && res.data && res.data.meta ? res.data.meta.name : null;
 
@@ -290,7 +289,7 @@ builder.defineStreamHandler(async (args) => {
 
 // Vercel / Local
 const addonInterface = builder.getInterface();
-module.exports = (req, res) => {
+export default (req, res) => {
     addonInterface.get(req, res);
 };
 
