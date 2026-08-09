@@ -134,27 +134,17 @@ async function getKisskhCatalog(type, skip = 0, searchQuery = null) {
             dramas = [...data1, ...data2];
         }
 
-        // Ако API-то е блокирано в облака, зареждаме актуалния списък директно от Explore страниците
         if (!dramas || dramas.length === 0) {
             if (type === "series") {
                 dramas = [
-                    { id: 6245, title: "Queen of Tears", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/f3bZ0c0mN23xV7hQ8k62vFk7S0s.jpg", type: 1 },
-                    { id: 6102, title: "Marry My Husband", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/81k30GvY3W9w2zFk2m7.jpg", type: 1 },
-                    { id: 5890, title: "Lovely Runner", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/q7E30s5j72v.jpg", type: 1 },
-                    { id: 5431, title: "My Demon", episodesCount: 16, thumbnail: "https://image.tmdb.org/t/p/w500/z6h302jN9.jpg", type: 1 },
                     { id: 4567, title: "Crash Landing on You", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
                     { id: 5120, title: "Goblin", episodesCount: 16, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 7111, title: "Business Proposal", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODg2ZjY4OGItNDYyNS00YzZhLWFiYjAtYTYyNmQwZWY2N2E1XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 },
-                    { id: 8222, title: "All of Us Are Dead", episodesCount: 12, thumbnail: "https://m.media-amazon.com/images/M/MV5BODJmMzJiODctNGVkMS00MjQ5LThjNDgtNDljNDcxNjNhZDdmXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
+                    { id: 6210, title: "Vincenzo", episodesCount: 20, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 1 }
                 ];
             } else {
                 dramas = [
                     { id: 9101, title: "20th Century Girl", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BYzJkYTA3MDUtYjMxNS00MGNmLThlMjMtYmE4MjY4MzZhZTliXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
-                    { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNjc0ZjdhOTktZjE1NC00OWM0LWE5NjItNmUwOTQ1NWM4YmNhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
-                    { id: 9103, title: "The Call", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BMzdhOGE2NDUtNjEwNC00YWZmLWEyYTItMGJiYmNhN2JkYmM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
-                    { id: 9104, title: "Unlocked", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNWVkMTIwM2YtOWFlOC00N2Y4LTg5YjktN2FhYjQ5MmUxZWVhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 },
-                    { id: 9105, title: "Space Sweepers", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BZjNmZDE0ZWYtN2Y5My00YmNmLTliNmItMTRlZDQwOGM5NWM0XkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 }
+                    { id: 9102, title: "Sweet & Sour", episodesCount: 1, thumbnail: "https://m.media-amazon.com/images/M/MV5BNjc0ZjdhOTktZjE1NC00OWM0LWE5NjItNmUwOTQ1NWM4YmNhXkEyXkFqcGdeQXVyMTMxODk2OTU@._V1_FMjpg_UX1000_.jpg", type: 2 }
                 ];
             }
         }
