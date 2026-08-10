@@ -4,7 +4,7 @@ const cheerio = require("cheerio");
 const { chromium } = require("playwright");
 
 const HTTP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Referer": "https://kisskh.org/"
 };
 
@@ -19,6 +19,13 @@ async function getBrowserInstance() {
             args: [
                 '--no-sandbox', 
                 '--disable-setuid-sandbox',
+                '--disable-infobars',
+                '--window-size=1920,1080',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
                 '--autoplay-policy=no-user-gesture-required'
             ] 
         });
@@ -26,12 +33,12 @@ async function getBrowserInstance() {
     return globalBrowser;
 }
 
-// 1. Дефиниране на Манифеста
+// 1. Манифест
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.playwright",
-    version: "26.1.0",
+    version: "26.2.0",
     name: "KissKH.org Playwright Addon",
-    description: "Оптимизиран KissKH Addon",
+    description: "Оптимизиран KissKH Addon с подобрена стабилност",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["kisskh_", "tt"],
@@ -51,7 +58,7 @@ const builder = new addonBuilder({
     ]
 });
 
-// 2. Каталог + Търсачка
+// 2. Каталог
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -69,7 +76,7 @@ builder.defineCatalogHandler(async function (args) {
     let metas = [];
 
     try {
-        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 8000 });
+        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 10000 });
         const $ = cheerio.load(response.data);
 
         $("article").each((i, el) => {
@@ -114,7 +121,7 @@ builder.defineCatalogHandler(async function (args) {
     return { metas };
 });
 
-// 3. МЕТАДАННИ
+// 3. МЕТАДАННИ (С увеличен timeout и по-меко зареждане)
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -134,7 +141,9 @@ builder.defineMetaHandler(async function (args) {
 
     try {
         const browser = await getBrowserInstance();
-        context = await browser.newContext();
+        context = await browser.newContext({
+            userAgent: HTTP_HEADERS["User-Agent"]
+        });
         page = await context.newPage();
 
         await page.route('**/*', (route) => {
@@ -146,8 +155,9 @@ builder.defineMetaHandler(async function (args) {
             }
         });
 
-        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 7000 });
-        await page.waitForSelector('.episode-item', { timeout: 3000 }).catch(() => {});
+        // Увеличен timeout на 15 секунди и използване на 'commit' за бързина
+        await page.goto(fullUrl, { waitUntil: 'commit', timeout: 15000 });
+        await page.waitForSelector('.episode-item', { timeout: 5000 }).catch(() => {});
 
         const pageData = await page.evaluate(() => {
             const epCount = document.querySelectorAll('.episode-item').length;
@@ -162,7 +172,7 @@ builder.defineMetaHandler(async function (args) {
         poster = pageData.posterSrc;
         totalEpisodes = pageData.epCount;
     } catch (e) {
-        console.error(`[Meta Error]:`, e.message);
+        console.error(`[Meta Error for ${slug}]:`, e.message);
     } finally {
         if (page) await page.close().catch(() => {});
         if (context) await context.close().catch(() => {});
@@ -198,7 +208,7 @@ builder.defineMetaHandler(async function (args) {
     return { meta: metaResult };
 });
 
-// 4. СТРИЙМОВЕ
+// 4. СТРИЙМОВЕ (С увеличен timeout за линковете)
 builder.defineStreamHandler(async function (args) {
     let kisskhId = args.id;
     let episodeNumber = "1";
@@ -215,7 +225,7 @@ builder.defineStreamHandler(async function (args) {
 
             if (title) {
                 let searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
-                let searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 5000 });
+                let searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 6000 });
                 let $ = cheerio.load(searchRes.data);
 
                 let matchedSlug = null;
@@ -257,12 +267,13 @@ builder.defineStreamHandler(async function (args) {
 
     try {
         const browser = await getBrowserInstance();
-        context = await browser.newContext();
+        context = await browser.newContext({
+            userAgent: HTTP_HEADERS["User-Agent"]
+        });
         page = await context.newPage();
 
         page.on('request', (req) => {
             const url = req.url();
-            
             if ((url.includes('.mp4') || url.includes('.m3u8')) && !url.includes('jwpltx.com') && !directMp4Url) {
                 directMp4Url = url;
             } else if (url.includes('jwpltx.com') && url.includes('mu=') && !directMp4Url) {
@@ -278,8 +289,9 @@ builder.defineStreamHandler(async function (args) {
             }
         });
 
-        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
-        await page.waitForTimeout(3000);
+        // Увеличен timeout на 20 секунди за епизодите
+        await page.goto(episodeUrl, { waitUntil: 'commit', timeout: 20000 });
+        await page.waitForTimeout(4000);
 
         if (!directMp4Url) {
             directMp4Url = await page.evaluate(() => {
@@ -300,7 +312,7 @@ builder.defineStreamHandler(async function (args) {
         }
 
     } catch (e) {
-        console.error(`[Stream Error]:`, e.message);
+        console.error(`[Stream Error for ${episodeUrl}]:`, e.message);
     } finally {
         if (page) await page.close().catch(() => {});
         if (context) await context.close().catch(() => {});
@@ -328,7 +340,7 @@ builder.defineStreamHandler(async function (args) {
     return { streams };
 });
 
-// Стартиране на сървъра
+// Стартиране
 const PORT = process.env.PORT || 7000;
 serveHTTP(builder.getInterface(), { port: PORT });
 console.log(`\n>>> KISSKH СЪРВЪРЪТ РАБОТИ НА ПОРТ ${PORT} <<<\n`);
