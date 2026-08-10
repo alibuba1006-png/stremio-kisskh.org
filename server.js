@@ -4,7 +4,7 @@ const cheerio = require("cheerio");
 const { chromium } = require("playwright");
 
 const HTTP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://kisskh.org/"
 };
 
@@ -19,13 +19,6 @@ async function getBrowserInstance() {
             args: [
                 '--no-sandbox', 
                 '--disable-setuid-sandbox',
-                '--disable-infobars',
-                '--window-size=1920,1080',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
                 '--autoplay-policy=no-user-gesture-required'
             ] 
         });
@@ -33,12 +26,12 @@ async function getBrowserInstance() {
     return globalBrowser;
 }
 
-// 1. Манифест
+// 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.playwright",
-    version: "26.2.0",
+    version: "26.0.0",
     name: "KissKH.org Playwright Addon",
-    description: "Оптимизиран KissKH Addon с подобрена стабилност",
+    description: "Перфектен KissKH Addon с точен улов на епизоди и видео потоци",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["kisskh_", "tt"],
@@ -58,7 +51,7 @@ const builder = new addonBuilder({
     ]
 });
 
-// 2. Каталог
+// 2. Каталог + Търсачка
 builder.defineCatalogHandler(async function (args) {
     const skip = args.extra && args.extra.skip ? parseInt(args.extra.skip) : 0;
     const searchQuery = args.extra && args.extra.search ? args.extra.search.trim() : null;
@@ -66,6 +59,7 @@ builder.defineCatalogHandler(async function (args) {
     let baseUrl = "";
     if (searchQuery) {
         baseUrl = `https://kisskh.org/?s=${encodeURIComponent(searchQuery)}`;
+        console.log(`\n[SEARCH] 🔍 Търсене за: "${searchQuery}" в категория: ${args.type}`);
     } else {
         const pageIndex = Math.floor(skip / 18) + 1;
         baseUrl = args.type === "movie" 
@@ -76,7 +70,7 @@ builder.defineCatalogHandler(async function (args) {
     let metas = [];
 
     try {
-        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 10000 });
+        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 8000 });
         const $ = cheerio.load(response.data);
 
         $("article").each((i, el) => {
@@ -115,13 +109,13 @@ builder.defineCatalogHandler(async function (args) {
             }
         });
     } catch (error) {
-        console.error(`[Catalog Error]:`, error.message);
+        console.error(`[ERROR Catalog]:`, error.message);
     }
 
     return { metas };
 });
 
-// 3. МЕТАДАННИ (С увеличен timeout и по-меко зареждане)
+// 3. МЕТАДАННИ (Коригиран връщан обект за Stremio)
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -132,18 +126,18 @@ builder.defineMetaHandler(async function (args) {
     const slug = Buffer.from(args.id.replace("kisskh_", ""), "base64").toString("utf-8");
     const fullUrl = `https://kisskh.org${slug}`;
 
+    console.log(`\n[META] 🔍 Извличане за: ${fullUrl}`);
+
     let totalEpisodes = 0;
     let pageTitle = "KissKH Content";
-    let description = "";
+    let description = "Няма описание.";
     let poster = "";
     let context = null;
     let page = null;
 
     try {
         const browser = await getBrowserInstance();
-        context = await browser.newContext({
-            userAgent: HTTP_HEADERS["User-Agent"]
-        });
+        context = await browser.newContext();
         page = await context.newPage();
 
         await page.route('**/*', (route) => {
@@ -155,9 +149,8 @@ builder.defineMetaHandler(async function (args) {
             }
         });
 
-        // Увеличен timeout на 15 секунди и използване на 'commit' за бързина
-        await page.goto(fullUrl, { waitUntil: 'commit', timeout: 15000 });
-        await page.waitForSelector('.episode-item', { timeout: 5000 }).catch(() => {});
+        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 7000 });
+        await page.waitForSelector('.episode-item', { timeout: 3000 }).catch(() => {});
 
         const pageData = await page.evaluate(() => {
             const epCount = document.querySelectorAll('.episode-item').length;
@@ -171,8 +164,10 @@ builder.defineMetaHandler(async function (args) {
         description = pageData.descText;
         poster = pageData.posterSrc;
         totalEpisodes = pageData.epCount;
+
+        console.log(`[META] 🎯 УСПЕХ! Намерени точно ${totalEpisodes} епизода за: ${pageTitle}`);
     } catch (e) {
-        console.error(`[Meta Error for ${slug}]:`, e.message);
+        console.error(`[ERROR Meta]:`, e.message);
     } finally {
         if (page) await page.close().catch(() => {});
         if (context) await context.close().catch(() => {});
@@ -208,7 +203,7 @@ builder.defineMetaHandler(async function (args) {
     return { meta: metaResult };
 });
 
-// 4. СТРИЙМОВЕ (С увеличен timeout за линковете)
+// 4. СТРИЙМОВЕ
 builder.defineStreamHandler(async function (args) {
     let kisskhId = args.id;
     let episodeNumber = "1";
@@ -222,10 +217,11 @@ builder.defineStreamHandler(async function (args) {
         try {
             const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`, { timeout: 4000 });
             const title = cinemetaRes.data?.meta?.name;
+            const year = cinemetaRes.data?.meta?.year;
 
             if (title) {
                 let searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
-                let searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 6000 });
+                let searchRes = await axios.get(searchUrl, { headers: HTTP_HEADERS, timeout: 5000 });
                 let $ = cheerio.load(searchRes.data);
 
                 let matchedSlug = null;
@@ -261,21 +257,23 @@ builder.defineStreamHandler(async function (args) {
     const slug = Buffer.from(mainId.replace("kisskh_", ""), "base64").toString("utf-8");
     const episodeUrl = `https://kisskh.org${slug}/?episode=${formattedEp}`;
 
+    console.log(`\n[STREAM] 🎬 Търсене на истински поток за епизод ${episodeNumber}: ${episodeUrl}`);
+
     let directMp4Url = null;
     let context = null;
     let page = null;
 
     try {
         const browser = await getBrowserInstance();
-        context = await browser.newContext({
-            userAgent: HTTP_HEADERS["User-Agent"]
-        });
+        context = await browser.newContext();
         page = await context.newPage();
 
         page.on('request', (req) => {
             const url = req.url();
+            
             if ((url.includes('.mp4') || url.includes('.m3u8')) && !url.includes('jwpltx.com') && !directMp4Url) {
                 directMp4Url = url;
+                console.log(`[STREAM 🎯] Уловен директен видео поток: ${directMp4Url}`);
             } else if (url.includes('jwpltx.com') && url.includes('mu=') && !directMp4Url) {
                 try {
                     const match = url.match(/mu=([^&]+)/);
@@ -283,15 +281,15 @@ builder.defineStreamHandler(async function (args) {
                         const decodedUrl = decodeURIComponent(match[1]);
                         if (decodedUrl.includes('.mp4') || decodedUrl.includes('.m3u8')) {
                             directMp4Url = decodedUrl;
+                            console.log(`[STREAM 🎯] Уловен видео поток от JW Player параметър (mu): ${directMp4Url}`);
                         }
                     }
                 } catch (err) {}
             }
         });
 
-        // Увеличен timeout на 20 секунди за епизодите
-        await page.goto(episodeUrl, { waitUntil: 'commit', timeout: 20000 });
-        await page.waitForTimeout(4000);
+        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await page.waitForTimeout(3000);
 
         if (!directMp4Url) {
             directMp4Url = await page.evaluate(() => {
@@ -312,7 +310,7 @@ builder.defineStreamHandler(async function (args) {
         }
 
     } catch (e) {
-        console.error(`[Stream Error for ${episodeUrl}]:`, e.message);
+        console.error(`[STREAM Error]:`, e.message);
     } finally {
         if (page) await page.close().catch(() => {});
         if (context) await context.close().catch(() => {});
@@ -320,6 +318,7 @@ builder.defineStreamHandler(async function (args) {
 
     let streams = [];
     if (directMp4Url) {
+        console.log(`[STREAM 🎯] ГОТОВО! Валиден линк за стрийм: ${directMp4Url}`);
         streams.push({
             name: "KissKH Player",
             title: `Гледай (Direct MP4)`,
@@ -335,12 +334,16 @@ builder.defineStreamHandler(async function (args) {
             }
         });
         streamCache.set(kisskhId, streams);
+    } else {
+        console.log(`[STREAM ❌] Не бе намерен валиден видео поток.`);
     }
 
     return { streams };
 });
 
 // Стартиране
-const PORT = process.env.PORT || 7000;
-serveHTTP(builder.getInterface(), { port: PORT });
-console.log(`\n>>> KISSKH СЪРВЪРЪТ РАБОТИ НА ПОРТ ${PORT} <<<\n`);
+serveHTTP(builder.getInterface(), { port: 7000 });
+console.log("\n====================================================");
+console.log(">>> KISSKH СЪРВЪРЪТ РАБОТИ УСПЕШНО НА ПОРТ 7000 <<<");
+console.log(">>> Manifest: http://localhost:7000/manifest.json");
+console.log("====================================================\n");
