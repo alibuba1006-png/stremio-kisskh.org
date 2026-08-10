@@ -4,7 +4,7 @@ const cheerio = require("cheerio");
 const { chromium } = require("playwright");
 
 const HTTP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Referer": "https://kisskh.org/"
 };
 
@@ -19,6 +19,14 @@ async function getBrowserInstance() {
             args: [
                 '--no-sandbox', 
                 '--disable-setuid-sandbox',
+                '--disable-infobars',
+                '--window-size=1920,1080',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu',
                 '--autoplay-policy=no-user-gesture-required'
             ] 
         });
@@ -29,9 +37,9 @@ async function getBrowserInstance() {
 // 1. Дефиниране на Манифеста
 const builder = new addonBuilder({
     id: "org.kisskh.org.universal.playwright",
-    version: "26.0.0",
+    version: "26.1.0",
     name: "KissKH.org Playwright Addon",
-    description: "Перфектен KissKH Addon с точен улов на епизоди и видео потоци",
+    description: "Перфектен KissKH Addon с точен улов на епизоди и видео потоци за Render",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     idPrefixes: ["kisskh_", "tt"],
@@ -70,7 +78,7 @@ builder.defineCatalogHandler(async function (args) {
     let metas = [];
 
     try {
-        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 8000 });
+        const response = await axios.get(baseUrl, { headers: HTTP_HEADERS, timeout: 10000 });
         const $ = cheerio.load(response.data);
 
         $("article").each((i, el) => {
@@ -115,7 +123,7 @@ builder.defineCatalogHandler(async function (args) {
     return { metas };
 });
 
-// 3. МЕТАДАННИ (Коригиран връщан обект за Stremio)
+// 3. МЕТАДАННИ
 builder.defineMetaHandler(async function (args) {
     if (!args.id.startsWith("kisskh_")) return { meta: null };
 
@@ -149,8 +157,9 @@ builder.defineMetaHandler(async function (args) {
             }
         });
 
-        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 7000 });
-        await page.waitForSelector('.episode-item', { timeout: 3000 }).catch(() => {});
+        // Увеличен timeout на 25 секунди за Render
+        await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        await page.waitForSelector('.episode-item', { timeout: 5000 }).catch(() => {});
 
         const pageData = await page.evaluate(() => {
             const epCount = document.querySelectorAll('.episode-item').length;
@@ -217,7 +226,6 @@ builder.defineStreamHandler(async function (args) {
         try {
             const cinemetaRes = await axios.get(`https://v3-cinemeta.strem.io/meta/${args.type}/${imdbId}.json`, { timeout: 4000 });
             const title = cinemetaRes.data?.meta?.name;
-            const year = cinemetaRes.data?.meta?.year;
 
             if (title) {
                 let searchUrl = `https://kisskh.org/?s=${encodeURIComponent(title)}`;
@@ -288,8 +296,9 @@ builder.defineStreamHandler(async function (args) {
             }
         });
 
-        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
-        await page.waitForTimeout(3000);
+        // Увеличен timeout на 25 секунди за потоците в Render
+        await page.goto(episodeUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        await page.waitForTimeout(4000);
 
         if (!directMp4Url) {
             directMp4Url = await page.evaluate(() => {
@@ -342,8 +351,8 @@ builder.defineStreamHandler(async function (args) {
 });
 
 // Стартиране
-serveHTTP(builder.getInterface(), { port: 7000 });
-console.log("\n====================================================");
-console.log(">>> KISSKH СЪРВЪРЪТ РАБОТИ УСПЕШНО НА ПОРТ 7000 <<<");
-console.log(">>> Manifest: http://localhost:7000/manifest.json");
-console.log("====================================================\n");
+const PORT = process.env.PORT || 7000;
+serveHTTP(builder.getInterface(), { port: PORT });
+console.log(`\n====================================================`);
+console.log(`>>> KISSKH СЪРВЪРЪТ РАБОТИ УСПЕШНО НА ПОРТ ${PORT} <<<`);
+console.log(`====================================================\n`);
